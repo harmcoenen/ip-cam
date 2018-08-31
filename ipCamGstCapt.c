@@ -280,6 +280,10 @@ static void cb_message (GstBus *bus, GstMessage *msg, CustomData *data) {
 
         case GST_MESSAGE_ELEMENT:
             g_print ("Element message [%s][%s][%s] received.\n", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg), gst_structure_get_name (gst_message_get_structure(msg)));
+            if (strcmp("splitmuxsink-fragment-closed", gst_structure_get_name (gst_message_get_structure(msg)))){
+                GST_LOG ("structure is %" GST_PTR_FORMAT, gst_message_get_structure(msg));
+                g_print ("closed file message: [%s]", gst_structure_to_string (gst_message_get_structure(msg)));
+            }
             break;
 
         case GST_MESSAGE_STATE_CHANGED:
@@ -459,7 +463,7 @@ int main(int argc, char *argv[]) {
     //g_object_set (data.parser, "output-format", 1, NULL);
     //g_object_set (data.parser, "config-interval", -1, NULL);
 
-    g_object_set (data.splitsink, "location", "/home/harm/RaspBerryPi/GSTreamerTutorial/rec%03d.mp4", NULL);
+    g_object_set (data.splitsink, "location", "/home/harm/github/ip-cam/rec%03d.mp4", NULL);
     g_object_set (data.splitsink, "max-size-time", (60 * GST_SECOND), NULL); // in nanoseconds so 10 seconds
     g_object_set (data.splitsink, "max-size-bytes", (50 * 10485760), NULL); // in bytes so 50 MBytes
     g_object_set (data.splitsink, "max-files", 25, NULL);
