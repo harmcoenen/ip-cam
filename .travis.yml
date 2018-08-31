@@ -5,6 +5,7 @@ sudo: false
 before_install:
 - sudo apt-get update -qq
 - sudo apt-get install -qq libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-doc gstreamer1.0-tools
+- sudo apt-get install -qq libgstreamer-plugins-base1.0-dev
 
 language: c
 
@@ -14,7 +15,7 @@ compiler:
   - gcc
 
 script:
-  - gcc ipCamGstCapt.c -o ipCamGstCapt `pkg-config --cflags --libs gstreamer-video-1.0 gtk+-3.0 gstreamer-1.0`
+  - gcc ipCamGstCapt.c -o ipCamGstCapt `pkg-config --cflags --libs gstreamer-video-1.0 gstreamer-1.0`
 
 notifications:
   email: false
