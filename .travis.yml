@@ -1,0 +1,16 @@
+dist: trusty
+
+sudo: false
+
+language: c
+
+os: linux
+
+compiler:
+  - gcc
+
+script:
+  - gcc ipCamGstCapt.c -o ipCamGstCapt `pkg-config --cflags --libs gstreamer-video-1.0 gtk+-3.0 gstreamer-1.0`
+
+notifications:
+  email: false
