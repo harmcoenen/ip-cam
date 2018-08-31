@@ -279,10 +279,11 @@ static void cb_message (GstBus *bus, GstMessage *msg, CustomData *data) {
             break;
 
         case GST_MESSAGE_ELEMENT:
-            g_print ("Element message [%s][%s][%s] received.\n", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg), gst_structure_get_name (gst_message_get_structure(msg)));
-            if (strcmp("splitmuxsink-fragment-closed", gst_structure_get_name (gst_message_get_structure(msg)))){
-                GST_LOG ("structure is %" GST_PTR_FORMAT, gst_message_get_structure(msg));
-                g_print ("closed file message: [%s]", gst_structure_to_string (gst_message_get_structure(msg)));
+            g_print ("Element message [%s][%s][%s] received.\n", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg), gst_structure_get_name (gst_message_get_structure (msg)));
+            if (strcmp("splitmuxsink-fragment-closed", gst_structure_get_name (gst_message_get_structure (msg))) == 0){
+                //GST_LOG ("structure is %" GST_PTR_FORMAT, gst_message_get_structure (msg));
+                //g_print ("closed file message: [%s]\n", gst_structure_to_string (gst_message_get_structure (msg)));
+                g_print ("Capture filename just closed is: [%s]\n", gst_structure_get_string (gst_message_get_structure (msg), "location"));
             }
             break;
 
