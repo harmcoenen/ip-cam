@@ -326,6 +326,15 @@ static void cb_message (GstBus *bus, GstMessage *msg, CustomData *data) {
     }
 }
 
+static GstPadProbeReturn pad_probe_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data)
+{
+    blokked = TRUE;
+    g_print ("--- pad is blocked now ---\n");
+    /* remove the probe first */
+    gst_pad_remove_probe (pad, GST_PAD_PROBE_INFO_ID (info));
+    return GST_PAD_PROBE_OK;
+}
+
 /* This function is called periodically */
 static gboolean timer_expired (CustomData *data) {
     data->timer_expired = TRUE;
@@ -337,9 +346,15 @@ static gboolean timer_expired (CustomData *data) {
 static gboolean watch_mainloop_timer_expired (CustomData *data) {
     g_print ("--- watch_mainloop_timer_expired, stopping, %s---\n", stopping ? "YES" : "NO");
     if (stopping) {
-        gst_element_send_event(data->pipeline, gst_event_new_eos());
-        gst_element_set_state (data->pipeline, GST_STATE_READY);
-        g_main_loop_quit (data->loop);
+        gst_pad_add_probe (data->blockpad, GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM, pad_probe_cb, NULL, NULL);
+    }
+    if (blokked) {
+        GstPad *sinkpad;
+        /* push EOS into the element, the probe will be fired when the
+        * EOS leaves the effect and it has thus drained all of its data */
+        sinkpad = gst_element_get_static_pad (data->decoder, "sink");
+        gst_pad_send_event (sinkpad, gst_event_new_eos ());
+        gst_object_unref (sinkpad);
     }
     return TRUE; /* Otherwise the callback will be cancelled */
 }
@@ -410,6 +425,9 @@ int main(int argc, char *argv[]) {
     data.muxer = gst_element_factory_make("mp4mux", "muxer"); // matroskamux or avimux or mp4mux
     data.sink = gst_element_factory_make ("autovideosink", "sink");
     data.splitsink = gst_element_factory_make ("splitmuxsink", "splitsink");
+
+    /* Attach a blockpad to this element to be able to stop the pipeline dataflow decently */
+    data.blockpad = gst_element_get_static_pad (data.depay, "src");
 
     /* Create the empty pipeline */
     data.pipeline = gst_pipeline_new ("my-pipeline");
@@ -494,7 +512,7 @@ int main(int argc, char *argv[]) {
 
     /* Register a function that GLib will call every x seconds */
     g_timeout_add_seconds (180, (GSourceFunc)timer_expired, &data);
-    g_timeout_add_seconds (5, (GSourceFunc)watch_mainloop_timer_expired, &data);
+    g_timeout_add_seconds (1, (GSourceFunc)watch_mainloop_timer_expired, &data);
 
     /* Run main loop */
     data.loop = g_main_loop_new (NULL, FALSE);

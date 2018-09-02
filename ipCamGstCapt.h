@@ -20,6 +20,8 @@ typedef struct _CustomData {
     GstElement *muxer;
     GstElement *sink;
     GstElement *splitsink;
+    GstPad *blockpad;
 } CustomData;
 
 static gboolean stopping = FALSE;
+static gboolean blokked = FALSE;
