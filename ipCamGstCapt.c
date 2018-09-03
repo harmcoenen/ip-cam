@@ -121,7 +121,9 @@ static void cb_message (GstBus *bus, GstMessage *msg, CustomData *data) {
             /* end-of-stream */
             g_print ("End-Of-Stream message [%s][%s] received.\n", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg));
             gst_element_set_state (data->pipeline, GST_STATE_READY);
-            g_main_loop_quit (data->loop);
+            if (user_interrupt) {
+                g_main_loop_quit (data->loop);
+            }
             break;
 
         case GST_MESSAGE_ERROR: {
@@ -280,6 +282,11 @@ static void cb_message (GstBus *bus, GstMessage *msg, CustomData *data) {
 
         case GST_MESSAGE_ELEMENT:
             g_print ("Element message [%s][%s][%s] received.\n", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg), gst_structure_get_name (gst_message_get_structure (msg)));
+            if (strcmp("splitmuxsink-fragment-opened", gst_structure_get_name (gst_message_get_structure (msg))) == 0){
+                //GST_LOG ("structure is %" GST_PTR_FORMAT, gst_message_get_structure (msg));
+                //g_print ("closed file message: [%s]\n", gst_structure_to_string (gst_message_get_structure (msg)));
+                g_print ("Capture filename just opened is: [%s]\n", gst_structure_get_string (gst_message_get_structure (msg), "location"));
+            }
             if (strcmp("splitmuxsink-fragment-closed", gst_structure_get_name (gst_message_get_structure (msg))) == 0){
                 //GST_LOG ("structure is %" GST_PTR_FORMAT, gst_message_get_structure (msg));
                 //g_print ("closed file message: [%s]\n", gst_structure_to_string (gst_message_get_structure (msg)));
@@ -328,33 +335,44 @@ static void cb_message (GstBus *bus, GstMessage *msg, CustomData *data) {
 
 static GstPadProbeReturn pad_probe_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data)
 {
-    blokked = TRUE;
+    GstPad *sinkpad;
+    GstElement *decoder = GST_ELEMENT (user_data);
+
     g_print ("--- pad is blocked now ---\n");
+
     /* remove the probe first */
     gst_pad_remove_probe (pad, GST_PAD_PROBE_INFO_ID (info));
+
+    /* Send the EOS signal to decently close the capture files */
+    sinkpad = gst_element_get_static_pad (decoder, "sink");
+    gst_pad_send_event (sinkpad, gst_event_new_eos ());
+    gst_object_unref (sinkpad);
     return GST_PAD_PROBE_OK;
 }
 
 /* This function is called periodically */
 static gboolean timer_expired (CustomData *data) {
-    data->timer_expired = TRUE;
-    g_print ("--- timer expired ---\n");
+    g_print ("--- timer expired, %s ---\n", data->timer_expired ? "restart pipeline" : "block pad and send EOS");
+    if (data->timer_expired){
+        data->timer_expired = FALSE;
+        //gst_element_set_state (data->pipeline, GST_STATE_PAUSED);
+        gst_element_set_state (data->pipeline, GST_STATE_PLAYING);
+    } else {
+        data->timer_expired = TRUE;
+        /* Add a pad probe to the src pad and block the downstream */
+        /* Once the stream is blocked send a EOS signal to decently close the capture files */
+        gst_pad_add_probe (data->blockpad, GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM, pad_probe_cb, data->decoder, NULL);
+    }
     return TRUE; /* Otherwise the callback will be cancelled */
 }
 
 /* This function is called periodically */
 static gboolean watch_mainloop_timer_expired (CustomData *data) {
-    g_print ("--- watch_mainloop_timer_expired, stopping, %s---\n", stopping ? "YES" : "NO");
-    if (stopping) {
-        gst_pad_add_probe (data->blockpad, GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM, pad_probe_cb, NULL, NULL);
-    }
-    if (blokked) {
-        GstPad *sinkpad;
-        /* push EOS into the element, the probe will be fired when the
-        * EOS leaves the effect and it has thus drained all of its data */
-        sinkpad = gst_element_get_static_pad (data->decoder, "sink");
-        gst_pad_send_event (sinkpad, gst_event_new_eos ());
-        gst_object_unref (sinkpad);
+    //g_print ("--- watch_mainloop_timer_expired, user_interrupt, %s---\n", user_interrupt ? "YES" : "NO");
+    if (user_interrupt) {
+        /* Add a pad probe to the src pad and block the downstream */
+        /* Once the stream is blocked send a EOS signal to decently close the capture files */
+        gst_pad_add_probe (data->blockpad, GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM, pad_probe_cb, data->decoder, NULL);
     }
     return TRUE; /* Otherwise the callback will be cancelled */
 }
@@ -369,7 +387,7 @@ void handle_interrupt_signal(int signal) {
             break;
         case SIGINT:
             g_print ("--- Caught SIGINT, ---\n");
-            stopping = TRUE;
+            user_interrupt = TRUE;
             break;
         default:
             g_print ("Caught signal: %d\n", signal);
@@ -511,7 +529,7 @@ int main(int argc, char *argv[]) {
     g_signal_connect (bus, "message", G_CALLBACK (cb_message), &data);
 
     /* Register a function that GLib will call every x seconds */
-    g_timeout_add_seconds (180, (GSourceFunc)timer_expired, &data);
+    g_timeout_add_seconds (150, (GSourceFunc)timer_expired, &data);
     g_timeout_add_seconds (1, (GSourceFunc)watch_mainloop_timer_expired, &data);
 
     /* Run main loop */

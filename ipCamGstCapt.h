@@ -23,5 +23,4 @@ typedef struct _CustomData {
     GstPad *blockpad;
 } CustomData;
 
-static gboolean stopping = FALSE;
-static gboolean blokked = FALSE;
+static gboolean user_interrupt = FALSE;
