@@ -4,6 +4,12 @@
 #include <signal.h> // sigaction(), sigsuspend(), sig*()
 #include <unistd.h> // alarm()
 
+const int maxRetries = 4;
+const char *CAPTURE_DIR = "rec";
+const char *UPLOAD_DIR = "upl";
+
+static gboolean user_interrupt = FALSE;
+
 /* Structure to contain all our information, so we can pass it to callbacks */
 typedef struct _CustomData {
     GMainLoop *loop;
@@ -23,4 +29,3 @@ typedef struct _CustomData {
     GstPad *blockpad;
 } CustomData;
 
-static gboolean user_interrupt = FALSE;

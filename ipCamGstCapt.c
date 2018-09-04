@@ -121,9 +121,7 @@ static void cb_message (GstBus *bus, GstMessage *msg, CustomData *data) {
             /* end-of-stream */
             g_print ("End-Of-Stream message [%s][%s] received.\n", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg));
             gst_element_set_state (data->pipeline, GST_STATE_READY);
-            if (user_interrupt) {
-                g_main_loop_quit (data->loop);
-            }
+            g_main_loop_quit (data->loop);
             break;
 
         case GST_MESSAGE_ERROR: {
@@ -336,39 +334,30 @@ static void cb_message (GstBus *bus, GstMessage *msg, CustomData *data) {
 static GstPadProbeReturn pad_probe_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data)
 {
     GstPad *sinkpad;
-    GstElement *decoder = GST_ELEMENT (user_data);
 
     g_print ("--- pad is blocked now ---\n");
 
     /* remove the probe first */
-    gst_pad_remove_probe (pad, GST_PAD_PROBE_INFO_ID (info));
+    //gst_pad_remove_probe (pad, GST_PAD_PROBE_INFO_ID (info));
 
     /* Send the EOS signal to decently close the capture files */
-    sinkpad = gst_element_get_static_pad (decoder, "sink");
+    sinkpad = gst_element_get_static_pad (GST_ELEMENT (user_data), "sink");
     gst_pad_send_event (sinkpad, gst_event_new_eos ());
     gst_object_unref (sinkpad);
-    return GST_PAD_PROBE_OK;
+
+    //return GST_PAD_PROBE_OK;
+    return GST_PAD_PROBE_REMOVE;
 }
 
 /* This function is called periodically */
 static gboolean timer_expired (CustomData *data) {
-    g_print ("--- timer expired, %s ---\n", data->timer_expired ? "restart pipeline" : "block pad and send EOS");
-    if (data->timer_expired){
-        data->timer_expired = FALSE;
-        //gst_element_set_state (data->pipeline, GST_STATE_PAUSED);
-        gst_element_set_state (data->pipeline, GST_STATE_PLAYING);
-    } else {
-        data->timer_expired = TRUE;
-        /* Add a pad probe to the src pad and block the downstream */
-        /* Once the stream is blocked send a EOS signal to decently close the capture files */
-        gst_pad_add_probe (data->blockpad, GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM, pad_probe_cb, data->decoder, NULL);
-    }
-    return TRUE; /* Otherwise the callback will be cancelled */
+    data->timer_expired = TRUE;
+    gst_pad_add_probe (data->blockpad, GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM, pad_probe_cb, data->decoder, NULL);
+    return FALSE; /* Otherwise the callback will continue */
 }
 
 /* This function is called periodically */
 static gboolean watch_mainloop_timer_expired (CustomData *data) {
-    //g_print ("--- watch_mainloop_timer_expired, user_interrupt, %s---\n", user_interrupt ? "YES" : "NO");
     if (user_interrupt) {
         /* Add a pad probe to the src pad and block the downstream */
         /* Once the stream is blocked send a EOS signal to decently close the capture files */
@@ -401,6 +390,13 @@ int main(int argc, char *argv[]) {
     GstCaps *caps;
     GstStateChangeReturn ret;
     struct sigaction sa;
+    int retries = 0;
+
+    /* Initialize GStreamer */
+    gst_init (&argc, &argv);
+
+    /* Initialize our data structure */
+    memset (&data, 0, sizeof (data));
 
     if (argc > 3){
         g_print("URI [%s]\n", argv[1]);
@@ -425,121 +421,127 @@ int main(int argc, char *argv[]) {
         g_printerr("Error: cannot handle SIGUSR1");
     }
 
-    /* Initialize GStreamer */
-    gst_init (&argc, &argv);
-
-    /* Initialize our data structure */
-    memset (&data, 0, sizeof (data));
-    data.timer_expired = FALSE;
-
-    /* Create the elements */
-    data.source = gst_element_factory_make ("rtspsrc", "source");
-    data.depay = gst_element_factory_make ("rtph264depay", "depay");
-    data.decoder = gst_element_factory_make ("avdec_h264", "decoder");
-    data.convert = gst_element_factory_make ("videoconvert", "convert");
-    data.scale = gst_element_factory_make ("videoscale", "scale");
-    data.encoder = gst_element_factory_make("x264enc", "encoder");
-    data.parser = gst_element_factory_make("h264parse", "parser");
-    data.muxer = gst_element_factory_make("mp4mux", "muxer"); // matroskamux or avimux or mp4mux
-    data.sink = gst_element_factory_make ("autovideosink", "sink");
-    data.splitsink = gst_element_factory_make ("splitmuxsink", "splitsink");
-
-    /* Attach a blockpad to this element to be able to stop the pipeline dataflow decently */
-    data.blockpad = gst_element_get_static_pad (data.depay, "src");
-
-    /* Create the empty pipeline */
-    data.pipeline = gst_pipeline_new ("my-pipeline");
-
-    if (!data.pipeline || !data.source || !data.depay || !data.decoder || !data.convert || !data.scale || !data.encoder || !data.parser || !data.muxer || !data.sink || !data.splitsink) {
-        g_printerr ("Not all elements could be created.\n");
-        return -1;
-    }
-
-    /* Build the pipeline. */
-    gst_bin_add_many (GST_BIN (data.pipeline), data.source, data.depay, data.decoder, data.convert, data.scale, data.encoder, data.parser, data.splitsink, NULL);
-
-    /* Note that we are NOT linking the source at this point. We will do it later. */
-    if (!gst_element_link_many (data.depay, data.decoder, data.convert, data.scale, NULL)) {
-        g_printerr ("Element link problem.\n");
-        gst_object_unref (data.pipeline);
-        return -1;
-    }
-
-    /* Negotiate caps */
-    //caps = gst_caps_from_string("video/x-raw, format=(string)RGB, width=320, height=240, framerate=(fraction)30/1");
-    // https://en.wikipedia.org/wiki/Display_resolution
-    // https://en.wikipedia.org/wiki/Display_resolution#/media/File:Vector_Video_Standards8.svg
-    //caps = gst_caps_from_string("video/x-raw, width=1280, height=720"); // Change scale from HD 1080 to HD 720
-    caps = gst_caps_from_string("video/x-raw, width=1024, height=576"); // Change scale from HD 1080 to PAL
-    if (!gst_element_link_filtered (data.scale, data.encoder, caps)) {
-        g_printerr ("Element scale could not be linked to element tee.\n");
-        gst_object_unref (data.pipeline);
-        return -1;
-    }
-    gst_caps_unref (caps);
-
-    /* Link the rest of the pipeline */
-    if (!gst_element_link_many (data.encoder, data.parser, data.splitsink, NULL)) {
-        g_printerr ("Rest of elements link problem.\n");
-        gst_object_unref (data.pipeline);
-        return -1;
-    }
-
-    /* Set the URI to play */
-    //g_object_set (data.source, "uri", "https://www.freedesktop.org/software/gstreamer-sdk/data/media/sintel_trailer-480p.webm", NULL);
-    g_object_set (data.source, "location", argv[1], NULL);
-    g_object_set (data.source, "user-id", argv[2], NULL);
-    g_object_set (data.source, "user-pw", argv[3], NULL);
-
-    g_object_set (data.encoder, "tune", 4, NULL); /* important, the encoder usually takes 1-3 seconds to process this. Queue buffer is generally upto 1 second. Hence, set tune=zerolatency (0x4) */
-    //g_object_set (data.encoder, "pass", 5, NULL);
-    //g_object_set (data.encoder, "qp-min", 18, NULL);
-
-    //g_object_set (data.parser, "split-packetized", TRUE, NULL);
-    //g_object_set (data.parser, "access-unit", TRUE, NULL);
-    //g_object_set (data.parser, "output-format", 1, NULL);
-    //g_object_set (data.parser, "config-interval", -1, NULL);
-
-    g_object_set (data.splitsink, "location", "/home/harm/github/ip-cam/rec%03d.mp4", NULL);
-    g_object_set (data.splitsink, "max-size-time", (60 * GST_SECOND), NULL); // in nanoseconds so 10 seconds
-    g_object_set (data.splitsink, "max-size-bytes", (50 * 10485760), NULL); // in bytes so 50 MBytes
-    g_object_set (data.splitsink, "max-files", 25, NULL);
-    g_object_set (data.splitsink, "muxer", data.muxer, NULL);
-
-    /* Connect to the pad-added signal */
-    g_signal_connect (data.source, "pad-added", G_CALLBACK (pad_added_handler), &data);
-
-    /* Start playing the pipeline */
-    g_print ("Go to PLAYING\n");
-    ret = gst_element_set_state (data.pipeline, GST_STATE_PLAYING);
-    if (ret == GST_STATE_CHANGE_FAILURE) {
-        g_printerr ("Unable to set the pipeline to the playing state.\n");
-        gst_object_unref (data.pipeline);
-        return -1;
-    } else if (ret == GST_STATE_CHANGE_NO_PREROLL) {
-        data.is_live = TRUE;
-        g_print ("Live stream.....\n");
-    } else {
-        g_print ("Not a live stream.....\n");
-    }
-
-    /* Listen to the bus */
-    bus = gst_element_get_bus (data.pipeline);
-    gst_bus_add_signal_watch (bus);
-    g_signal_connect (bus, "message", G_CALLBACK (cb_message), &data);
-
     /* Register a function that GLib will call every x seconds */
-    g_timeout_add_seconds (150, (GSourceFunc)timer_expired, &data);
     g_timeout_add_seconds (1, (GSourceFunc)watch_mainloop_timer_expired, &data);
 
-    /* Run main loop */
-    data.loop = g_main_loop_new (NULL, FALSE);
-    g_main_loop_run (data.loop);
+    while ((!user_interrupt) && (retries < maxRetries)) {
+        data.timer_expired = FALSE;
 
-    /* Free resources */
-    g_main_loop_unref (data.loop);
-    gst_object_unref (bus);
-    gst_element_set_state (data.pipeline, GST_STATE_NULL);
-    gst_object_unref (data.pipeline);
+        /* Create the elements */
+        data.source = gst_element_factory_make ("rtspsrc", "source");
+        data.depay = gst_element_factory_make ("rtph264depay", "depay");
+        data.decoder = gst_element_factory_make ("avdec_h264", "decoder");
+        data.convert = gst_element_factory_make ("videoconvert", "convert");
+        data.scale = gst_element_factory_make ("videoscale", "scale");
+        data.encoder = gst_element_factory_make("x264enc", "encoder");
+        data.parser = gst_element_factory_make("h264parse", "parser");
+        data.muxer = gst_element_factory_make("mp4mux", "muxer"); // matroskamux or avimux or mp4mux
+        data.sink = gst_element_factory_make ("autovideosink", "sink");
+        data.splitsink = gst_element_factory_make ("splitmuxsink", "splitsink");
+
+        /* Attach a blockpad to this element to be able to stop the pipeline dataflow decently */
+        data.blockpad = gst_element_get_static_pad (data.depay, "src");
+
+        /* Create the empty pipeline */
+        data.pipeline = gst_pipeline_new ("my-pipeline");
+
+        if (!data.pipeline || !data.source || !data.depay || !data.decoder || !data.convert || !data.scale || !data.encoder || !data.parser || !data.muxer || !data.sink || !data.splitsink) {
+            g_printerr ("Not all elements could be created.\n");
+            return -1;
+        }
+
+        /* Build the pipeline. */
+        gst_bin_add_many (GST_BIN (data.pipeline), data.source, data.depay, data.decoder, data.convert, data.scale, data.encoder, data.parser, data.splitsink, NULL);
+
+        /* Note that we are NOT linking the source at this point. We will do it later. */
+        if (!gst_element_link_many (data.depay, data.decoder, data.convert, data.scale, NULL)) {
+            g_printerr ("Element link problem.\n");
+            gst_object_unref (data.pipeline);
+            return -1;
+        }
+
+        /* Negotiate caps */
+        //caps = gst_caps_from_string("video/x-raw, format=(string)RGB, width=320, height=240, framerate=(fraction)30/1");
+        // https://en.wikipedia.org/wiki/Display_resolution
+        // https://en.wikipedia.org/wiki/Display_resolution#/media/File:Vector_Video_Standards8.svg
+        //caps = gst_caps_from_string("video/x-raw, width=1280, height=720"); // Change scale from HD 1080 to HD 720
+        caps = gst_caps_from_string("video/x-raw, width=1024, height=576"); // Change scale from HD 1080 to PAL
+        if (!gst_element_link_filtered (data.scale, data.encoder, caps)) {
+            g_printerr ("Element scale could not be linked to element tee.\n");
+            gst_object_unref (data.pipeline);
+            return -1;
+        }
+        gst_caps_unref (caps);
+
+        /* Link the rest of the pipeline */
+        if (!gst_element_link_many (data.encoder, data.parser, data.splitsink, NULL)) {
+            g_printerr ("Rest of elements link problem.\n");
+            gst_object_unref (data.pipeline);
+            return -1;
+        }
+
+        /* Set the URI to play */
+        //g_object_set (data.source, "uri", "https://www.freedesktop.org/software/gstreamer-sdk/data/media/sintel_trailer-480p.webm", NULL);
+        g_object_set (data.source, "location", argv[1], NULL);
+        g_object_set (data.source, "user-id", argv[2], NULL);
+        g_object_set (data.source, "user-pw", argv[3], NULL);
+
+        g_object_set (data.encoder, "tune", 4, NULL); /* important, the encoder usually takes 1-3 seconds to process this. Queue buffer is generally upto 1 second. Hence, set tune=zerolatency (0x4) */
+        //g_object_set (data.encoder, "pass", 5, NULL);
+        //g_object_set (data.encoder, "qp-min", 18, NULL);
+
+        //g_object_set (data.parser, "split-packetized", TRUE, NULL);
+        //g_object_set (data.parser, "access-unit", TRUE, NULL);
+        //g_object_set (data.parser, "output-format", 1, NULL);
+        //g_object_set (data.parser, "config-interval", -1, NULL);
+
+        g_object_set (data.splitsink, "location", "/home/harm/github/ip-cam/rec%03d.mp4", NULL);
+        g_object_set (data.splitsink, "max-size-time", (60 * GST_SECOND), NULL); // in nanoseconds so 10 seconds
+        g_object_set (data.splitsink, "max-size-bytes", (50 * 10485760), NULL); // in bytes so 50 MBytes
+        g_object_set (data.splitsink, "max-files", 25, NULL);
+        g_object_set (data.splitsink, "muxer", data.muxer, NULL);
+
+        /* Connect to the pad-added signal */
+        g_signal_connect (data.source, "pad-added", G_CALLBACK (pad_added_handler), &data);
+
+        /* Start playing the pipeline */
+        g_print ("---> Go to PLAYING, retries is [%d/%d]\n", retries, maxRetries);
+        ret = gst_element_set_state (data.pipeline, GST_STATE_PLAYING);
+        if (ret == GST_STATE_CHANGE_FAILURE) {
+            g_printerr ("Unable to set the pipeline to the playing state.\n");
+            gst_object_unref (data.pipeline);
+            return -1;
+        } else if (ret == GST_STATE_CHANGE_NO_PREROLL) {
+            data.is_live = TRUE;
+            g_print ("Live stream.....\n");
+        } else {
+            g_print ("Not a live stream.....\n");
+        }
+
+        g_timeout_add_seconds (75, (GSourceFunc)timer_expired, &data);
+
+        /* Listen to the bus */
+        bus = gst_element_get_bus (data.pipeline);
+        gst_bus_add_signal_watch (bus);
+        g_signal_connect (bus, "message", G_CALLBACK (cb_message), &data);
+
+        /* Run main loop */
+        data.loop = g_main_loop_new (NULL, FALSE);
+        g_main_loop_run (data.loop);
+
+        /* Free resources */
+        g_main_loop_unref (data.loop);
+        gst_object_unref (bus);
+        gst_element_set_state (data.pipeline, GST_STATE_NULL);
+        gst_object_unref (data.pipeline);
+
+        retries++;
+        if (!user_interrupt)
+        {
+            g_print ("Sleepy.....\n");
+            sleep (40);
+        }
+    }
+
     return 0;
 }
