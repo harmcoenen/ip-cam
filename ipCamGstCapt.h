@@ -1,5 +1,9 @@
+#ifndef IP_CAM_GST_CAPT_H_INCLUDED
+#define IP_CAM_GST_CAPT_H_INCLUDED
+
 #include <gst/gst.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <signal.h> // sigaction(), sigsuspend(), sig*()
 #include <unistd.h> // alarm()
@@ -29,3 +33,4 @@ typedef struct _CustomData {
     GstPad *blockpad;
 } CustomData;
 
+#endif /* IP_CAM_GST_CAPT_H_INCLUDED */

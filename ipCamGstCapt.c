@@ -1,4 +1,5 @@
 #include "ipCamGstCapt.h"
+#include "functions.h"
 
 /* Functions below print the Capabilities in a human-friendly format */
 static gboolean print_field (GQuark field, const GValue * value, gpointer pfx) {
@@ -110,6 +111,40 @@ static void print_tag (const GstTagList * list, const gchar * tag, gpointer unus
         }
         g_free (str); 
     }
+}
+
+/* Process keyboard input */
+static gboolean handle_keyboard (GIOChannel *channel, GIOCondition cond, CustomData *data) {
+    gchar *retString;
+    gsize length;
+    gsize terminator_pos;
+    GError *error = NULL;
+    GIOStatus retStatus;
+
+    retStatus = g_io_channel_read_line (channel, &retString, &length, &terminator_pos, &error);
+    switch (retStatus) {
+        case G_IO_STATUS_ERROR:
+            if (error != NULL) {
+                //g_printf (error->message);
+                exit(-3);
+            }
+            break;
+        case G_IO_STATUS_NORMAL: {
+            int index = g_ascii_strtoull (retString, NULL, 0);
+            if (index < 0 || index >= 8) {
+              g_printerr ("Index out of bounds\n");
+            } else {
+              /* If the input was a valid audio stream index, set the current audio stream */
+              g_print ("You presses %d, adding 10 becomes %d\n", index, Summy(index, 10));
+            }
+            break;
+        }
+        default:
+            break;
+    }
+
+    g_free (retString);
+    return TRUE;
 }
 
 static void cb_message (GstBus *bus, GstMessage *msg, CustomData *data) {
@@ -389,6 +424,7 @@ int main(int argc, char *argv[]) {
     GstBus *bus;
     GstCaps *caps;
     GstStateChangeReturn ret;
+    GIOChannel *io_channel;
     struct sigaction sa;
     int retries = 0;
 
@@ -524,6 +560,14 @@ int main(int argc, char *argv[]) {
         bus = gst_element_get_bus (data.pipeline);
         gst_bus_add_signal_watch (bus);
         g_signal_connect (bus, "message", G_CALLBACK (cb_message), &data);
+
+        /* Add a keyboard watch so we get notified of keystrokes */
+#ifdef G_OS_WIN32
+        io_channel = g_io_channel_win32_new_fd (fileno (stdin));
+#else
+        io_channel = g_io_channel_unix_new (fileno (stdin));
+#endif
+        g_io_add_watch (io_channel, G_IO_IN, (GIOFunc)handle_keyboard, &data);
 
         /* Run main loop */
         data.loop = g_main_loop_new (NULL, FALSE);
