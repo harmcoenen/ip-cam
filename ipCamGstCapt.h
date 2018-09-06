@@ -1,12 +1,5 @@
-#ifndef IP_CAM_GST_CAPT_H_INCLUDED
-#define IP_CAM_GST_CAPT_H_INCLUDED
-
-#include <gst/gst.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <signal.h> // sigaction(), sigsuspend(), sig*()
-#include <unistd.h> // alarm()
+#ifndef IPCAMGSTCAPT_H
+#define IPCAMGSTCAPT_H
 
 const int maxRetries = 4;
 const char *CAPTURE_DIR = "rec";
@@ -33,4 +26,4 @@ typedef struct _CustomData {
     GstPad *blockpad;
 } CustomData;
 
-#endif /* IP_CAM_GST_CAPT_H_INCLUDED */
+#endif /* IPCAMGSTCAPT_H */
