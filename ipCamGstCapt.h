@@ -1,7 +1,7 @@
 #ifndef IPCAMGSTCAPT_H
 #define IPCAMGSTCAPT_H
 
-const int maxRetries = 4;
+const int maxRetries = 24;
 const char *CAPTURE_DIR = "rec";
 const char *UPLOAD_DIR = "upl";
 

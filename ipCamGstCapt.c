@@ -203,8 +203,8 @@ static void cb_message (GstBus *bus, GstMessage *msg, CustomData *data) {
             gst_message_parse_stream_status (msg, &type, &owner);
             path_source = gst_object_get_path_string (GST_MESSAGE_SRC (msg));
             path_owner = gst_object_get_path_string (GST_OBJECT (owner));
-            g_print ("type: %d    source: %s\n", type, path_source);
-            g_print ("           owner:  %s\n", path_owner);
+            //g_print ("type: %d    source: %s\n", type, path_source);
+            //g_print ("           owner:  %s\n", path_owner);
             g_free (path_source);
             g_free (path_owner);
             val = gst_message_get_stream_status_object (msg);
@@ -213,29 +213,29 @@ static void cb_message (GstBus *bus, GstMessage *msg, CustomData *data) {
             if (G_VALUE_TYPE (val) == GST_TYPE_TASK) task = g_value_get_object (val);
             switch (type) {
                 case GST_STREAM_STATUS_TYPE_CREATE:
-                    g_print ("Stream status CREATE, created task %p, type %s, value %p\n", task, G_VALUE_TYPE_NAME (val), g_value_get_object (val));
+                    //g_print ("Stream status CREATE, created task %p, type %s, value %p\n", task, G_VALUE_TYPE_NAME (val), g_value_get_object (val));
                     break;
                 case GST_STREAM_STATUS_TYPE_ENTER:
-                    g_print ("Stream status ENTER, type %s, value %p\n", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
+                    //g_print ("Stream status ENTER, type %s, value %p\n", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
                     /* setpriority (PRIO_PROCESS, 0, -10); */
                     break;
                 case GST_STREAM_STATUS_TYPE_LEAVE:
-                    g_print ("Stream status LEAVE, type %s, value %p\n", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
+                    //g_print ("Stream status LEAVE, type %s, value %p\n", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
                     break;
                 case GST_STREAM_STATUS_TYPE_DESTROY:
-                    g_print ("Stream status DESTROY, type %s, value %p\n", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
+                    //g_print ("Stream status DESTROY, type %s, value %p\n", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
                     break;
                 case GST_STREAM_STATUS_TYPE_START:
-                    g_print ("Stream status START, type %s, value %p\n", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
+                    //g_print ("Stream status START, type %s, value %p\n", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
                     break;
                 case GST_STREAM_STATUS_TYPE_PAUSE:
-                    g_print ("Stream status PAUSE, type %s, value %p\n", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
+                    //g_print ("Stream status PAUSE, type %s, value %p\n", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
                     break;
                 case GST_STREAM_STATUS_TYPE_STOP:
-                    g_print ("Stream status STOP, type %s, value %p\n", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
+                    //g_print ("Stream status STOP, type %s, value %p\n", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
                     break;
                 default:
-                    g_print ("Stream status unknown as default is hit.\n");
+                    //g_print ("Stream status unknown as default is hit.\n");
                     break;
             }
             break;
@@ -246,15 +246,11 @@ static void cb_message (GstBus *bus, GstMessage *msg, CustomData *data) {
             break;
 
         case GST_MESSAGE_ELEMENT:
-            g_print ("Element message [%s][%s][%s] received.\n", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg), gst_structure_get_name (gst_message_get_structure (msg)));
+            //g_print ("Element message [%s][%s][%s] received.\n", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg), gst_structure_get_name (gst_message_get_structure (msg)));
             if (strcmp("splitmuxsink-fragment-opened", gst_structure_get_name (gst_message_get_structure (msg))) == 0){
-                //GST_LOG ("structure is %" GST_PTR_FORMAT, gst_message_get_structure (msg));
-                //g_print ("closed file message: [%s]\n", gst_structure_to_string (gst_message_get_structure (msg)));
                 g_print ("Capture filename just opened is: [%s]\n", gst_structure_get_string (gst_message_get_structure (msg), "location"));
             }
             if (strcmp("splitmuxsink-fragment-closed", gst_structure_get_name (gst_message_get_structure (msg))) == 0){
-                //GST_LOG ("structure is %" GST_PTR_FORMAT, gst_message_get_structure (msg));
-                //g_print ("closed file message: [%s]\n", gst_structure_to_string (gst_message_get_structure (msg)));
                 g_print ("Capture filename just closed is: [%s]\n", gst_structure_get_string (gst_message_get_structure (msg), "location"));
             }
             break;
@@ -264,10 +260,10 @@ static void cb_message (GstBus *bus, GstMessage *msg, CustomData *data) {
             if (GST_MESSAGE_SRC (msg) == GST_OBJECT (data->pipeline)) {
                 GstState old_state, new_state, pending_state;
                 gst_message_parse_state_changed (msg, &old_state, &new_state, &pending_state);
-                g_print ("\nPipeline state changed from %s to %s:\n", gst_element_state_get_name (old_state), gst_element_state_get_name (new_state));
+                g_print ("Pipeline state changed from %s to %s:\n", gst_element_state_get_name (old_state), gst_element_state_get_name (new_state));
                 /* Print the current capabilities of the sink element */
                 //print_pad_capabilities (data->convert, "sink");
-                print_pad_capabilities (data->encoder, "sink");
+                //print_pad_capabilities (data->encoder, "sink");
                 //print_pad_capabilities (data->parser, "sink");
                 //print_pad_capabilities (data->splitsink, "video");
             }
@@ -302,7 +298,7 @@ static GstPadProbeReturn pad_probe_cb (GstPad * pad, GstPadProbeInfo * info, gpo
 {
     GstPad *sinkpad;
 
-    g_print ("--- pad is blocked now ---\n");
+    g_print ("Pad is blocked now\n");
 
     /* remove the probe first */
     //gst_pad_remove_probe (pad, GST_PAD_PROBE_INFO_ID (info));
@@ -320,6 +316,7 @@ static GstPadProbeReturn pad_probe_cb (GstPad * pad, GstPadProbeInfo * info, gpo
 static gboolean timer_expired (CustomData *data) {
     data->timer_expired = TRUE;
     gst_pad_add_probe (data->blockpad, GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM, pad_probe_cb, data->decoder, NULL);
+    g_print ("Timer_expired\n");
     return FALSE; /* Otherwise the callback will continue */
 }
 
@@ -336,13 +333,13 @@ static gboolean watch_mainloop_timer_expired (CustomData *data) {
 void handle_interrupt_signal(int signal) {
     switch (signal) {
         case SIGHUP:
-            g_print ("--- Caught SIGHUP, ---\n");
+            g_print ("Caught SIGHUP\n");
             break;
         case SIGUSR1:
-            g_print ("--- Caught SIGUSR1, ---\n");
+            g_print ("Caught SIGUSR1\n");
             break;
         case SIGINT:
-            g_print ("--- Caught SIGINT, ---\n");
+            g_print ("Caught SIGINT\n");
             user_interrupt = TRUE;
             break;
         default:
@@ -380,13 +377,13 @@ int main(int argc, char *argv[]) {
     sa.sa_flags = SA_RESTART;                    // Restart the system call, if at all possible
     sigfillset(&sa.sa_mask);                     // Block every signal during the handler
     if (sigaction(SIGINT, &sa, NULL) == -1) {    // Intercept SIGINT
-        g_printerr ("Error: cannot handle SIGINT");
+        g_printerr ("Error: cannot handle SIGINT\n");
     }
     if (sigaction(SIGHUP, &sa, NULL) == -1) {    // Intercept SIGHUP
-        g_printerr("Error: cannot handle SIGHUP");
+        g_printerr("Error: cannot handle SIGHUP\n");
     }
     if (sigaction(SIGUSR1, &sa, NULL) == -1) {   // Intercept SIGUSR1
-        g_printerr("Error: cannot handle SIGUSR1");
+        g_printerr("Error: cannot handle SIGUSR1\n");
     }
 
     /* Register a function that GLib will call every x seconds */
@@ -464,16 +461,16 @@ int main(int argc, char *argv[]) {
         //g_object_set (data.parser, "config-interval", -1, NULL);
 
         g_object_set (data.splitsink, "location", "/home/harm/github/ip-cam/rec%03d.mp4", NULL);
-        g_object_set (data.splitsink, "max-size-time", (60 * GST_SECOND), NULL); // in nanoseconds so 10 seconds
-        g_object_set (data.splitsink, "max-size-bytes", (50 * 10485760), NULL); // in bytes so 50 MBytes
-        g_object_set (data.splitsink, "max-files", 25, NULL);
+        g_object_set (data.splitsink, "max-size-bytes", (150 * 1048576), NULL); // in bytes. 0 = disable, default is 0
+        g_object_set (data.splitsink, "max-size-time", (5 * 60 * GST_SECOND), NULL); // in nanoseconds. 0 = disable, default is 0
+        g_object_set (data.splitsink, "max-files", 30, NULL); // default is 0
         g_object_set (data.splitsink, "muxer", data.muxer, NULL);
 
         /* Connect to the pad-added signal */
         g_signal_connect (data.source, "pad-added", G_CALLBACK (pad_added_handler), &data);
 
         /* Start playing the pipeline */
-        g_print ("---> Go to PLAYING, retries is [%d/%d]\n", retries, maxRetries);
+        g_print ("Go to PLAYING, retries is [%d/%d]\n", retries, maxRetries);
         ret = gst_element_set_state (data.pipeline, GST_STATE_PLAYING);
         if (ret == GST_STATE_CHANGE_FAILURE) {
             g_printerr ("Unable to set the pipeline to the playing state.\n");
@@ -481,12 +478,12 @@ int main(int argc, char *argv[]) {
             return -1;
         } else if (ret == GST_STATE_CHANGE_NO_PREROLL) {
             data.is_live = TRUE;
-            g_print ("Live stream.....\n");
+            g_print ("Live stream\n");
         } else {
-            g_print ("Not a live stream.....\n");
+            g_print ("Not a live stream\n");
         }
 
-        g_timeout_add_seconds (75, (GSourceFunc)timer_expired, &data);
+        g_timeout_add_seconds ((60*60), (GSourceFunc)timer_expired, &data);
 
         /* Listen to the bus */
         bus = gst_element_get_bus (data.pipeline);
@@ -514,8 +511,8 @@ int main(int argc, char *argv[]) {
         retries++;
         if (!user_interrupt)
         {
-            g_print ("Sleepy.....\n");
-            sleep (40);
+            g_print ("Moving recording files now to be able to upload them in another thread.\n");
+            sleep (60);
         }
     }
 
