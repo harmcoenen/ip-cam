@@ -2,13 +2,17 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <signal.h> // sigaction(), sigsuspend(), sig*()
-#include <unistd.h> // alarm()
+#include <signal.h>
+#include <unistd.h>
+#include <errno.h>
+#include <time.h>
+#include <limits.h>
+#include <linux/limits.h>
 #include "ipCamGstCapt.h"
 #include "ipCamPrinting.h"
 
 /* This function will be called by the pad-added signal */
-static void pad_added_handler (GstElement *src, GstPad *new_pad, CustomData *data) {
+static void handle_pad_added (GstElement *src, GstPad *new_pad, CustomData *data) {
     GstPad *sink_pad = gst_element_get_static_pad (data->depay, "sink");
     GstPadLinkReturn ret;
     GstCaps *new_pad_caps = NULL;
@@ -58,7 +62,7 @@ static gboolean handle_keyboard (GIOChannel *channel, GIOCondition cond, CustomD
         case G_IO_STATUS_ERROR:
             if (error != NULL) {
                 //g_printf (error->message);
-                exit(-3);
+                exit(-10);
             }
             break;
         case G_IO_STATUS_NORMAL: {
@@ -79,7 +83,7 @@ static gboolean handle_keyboard (GIOChannel *channel, GIOCondition cond, CustomD
     return TRUE;
 }
 
-static void cb_message (GstBus *bus, GstMessage *msg, CustomData *data) {
+static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) {
 
     // https://gstreamer.freedesktop.org/documentation/design/messages.html
     // https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstMessage.html
@@ -250,13 +254,14 @@ static void cb_message (GstBus *bus, GstMessage *msg, CustomData *data) {
             //g_print ("\nElement message [%s][%s][%s] received.", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg), gst_structure_get_name (gst_message_get_structure (msg)));
             if (strcmp("splitmuxsink-fragment-opened", gst_structure_get_name (gst_message_get_structure (msg))) == 0){
                 data->file_is_open = TRUE;
-                data->current_opened_file = strcpy(openenfilename, gst_structure_get_string (gst_message_get_structure (msg), "location"));
-                g_print ("\nCapture filename just opened is: [%s]", openenfilename);
+                data->current_opened_file = strcpy(openedfilename, gst_structure_get_string (gst_message_get_structure (msg), "location"));
+                g_print ("\nCapture filename just opened is: [%s]", openedfilename);
             }
             if (strcmp("splitmuxsink-fragment-closed", gst_structure_get_name (gst_message_get_structure (msg))) == 0){
                 data->file_is_open = FALSE;
                 data->current_closed_file = strcpy(closedfilename, gst_structure_get_string (gst_message_get_structure (msg), "location"));
                 g_print ("\nCapture filename just closed is: [%s]", closedfilename);
+                move_to_upload_directory(data);
                 /* move it to the ftp upload directory to keep it safe */
             }
             break;
@@ -343,7 +348,7 @@ static gboolean watch_mainloop_timer_expired (CustomData *data) {
     return TRUE; /* Otherwise the callback will be cancelled */
 }
 
-void handle_interrupt_signal(int signal) {
+static void handle_interrupt_signal(int signal) {
     switch (signal) {
         case SIGINT:
             g_print ("\nCaught SIGINT");
@@ -356,6 +361,24 @@ void handle_interrupt_signal(int signal) {
             g_print ("\nCaught signal: %d", signal);
             break;
     }
+}
+
+static gboolean move_to_upload_directory(CustomData *data) {
+    time_t seconds_since_epoch;
+    struct tm *time_info;
+    char time_string[20];
+
+    /* The function time_t time(time_t *seconds) returns the time since the Epoch (00:00:00 UTC, January 1, 1970), measured in seconds. */
+    /* If seconds is not NULL, the return value is also stored in variable seconds. */
+    time (&seconds_since_epoch); /* See https://www.tutorialspoint.com/c_standard_library/c_function_time.htm */
+    time_info = localtime (&seconds_since_epoch); /* See https://www.tutorialspoint.com/c_standard_library/c_function_localtime.htm */
+    strftime (time_string, 20, "%Y_%m_%d_%H_%M_%S", time_info); /* See https://www.tutorialspoint.com/c_standard_library/c_function_strftime.htm */
+    g_print ("\nFormatted time_string is [%s]", time_string);
+    
+    if (rename (closedfilename, "/home/harm/github/ip-cam/upl/harm.mp4") == -1) {
+        g_printerr ("\nrename returned error [%s]", strerror (errno));
+    }
+    return TRUE;
 }
 
 int main(int argc, char *argv[]) {
@@ -372,7 +395,9 @@ int main(int argc, char *argv[]) {
 
     /* Initialize our data structure */
     memset (&data, 0, sizeof (data));
-    memset (openenfilename, '\0', sizeof (openenfilename));
+    memset (capture_dir, '\0', sizeof (capture_dir));
+    memset (uploads_dir, '\0', sizeof (uploads_dir));
+    memset (openedfilename, '\0', sizeof (openedfilename));
     memset (closedfilename, '\0', sizeof (closedfilename));
 
     if (argc > 3){
@@ -382,6 +407,21 @@ int main(int argc, char *argv[]) {
     } else {
         g_print ("\nToo little parameters. Please supply URI, user name and password.");
         exit (-2);
+    }
+
+    // Determine the current working directory
+    working_dir = getcwd (NULL, 0);
+    if (working_dir != NULL) {
+        g_print ("\nCurrent working dir: [%s][%lu]", working_dir, strlen (working_dir));
+        strcpy (capture_dir, working_dir);
+        strcpy (uploads_dir, working_dir);
+        strcat (capture_dir, "/rec");
+        strcat (uploads_dir, "/upl");
+        g_print ("\nCapture dir: [%s][%lu]", capture_dir, strlen (capture_dir));
+        g_print ("\nUploads dir: [%s][%lu]", uploads_dir, strlen (uploads_dir));
+    } else {
+        g_print ("\nCould not find the current working directory.");
+        exit (-3);
     }
 
     // Setup the signal handler
@@ -478,7 +518,7 @@ int main(int argc, char *argv[]) {
         g_object_set (data.splitsink, "muxer", data.muxer, NULL);
 
         /* Connect to the pad-added signal */
-        g_signal_connect (data.source, "pad-added", G_CALLBACK (pad_added_handler), &data);
+        g_signal_connect (data.source, "pad-added", G_CALLBACK (handle_pad_added), &data);
 
         /* Start playing the pipeline */
         g_print ("\nGo to PLAYING, run [%d]", runs);
@@ -497,7 +537,7 @@ int main(int argc, char *argv[]) {
         /* Listen to the bus */
         bus = gst_element_get_bus (data.pipeline);
         gst_bus_add_signal_watch (bus);
-        g_signal_connect (bus, "message", G_CALLBACK (cb_message), &data);
+        g_signal_connect (bus, "message", G_CALLBACK (handle_bus_message), &data);
 
         /* Add a keyboard watch so we get notified of keystrokes */
 #ifdef G_OS_WIN32
@@ -522,6 +562,10 @@ int main(int argc, char *argv[]) {
         
         
     }
+
+    /* Free resources */
+    free (working_dir);
+
     g_print ("\n\nHave a nice day.\n");
     return 0;
 }
