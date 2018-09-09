@@ -8,6 +8,8 @@
 #include <time.h>
 #include <limits.h>
 #include <linux/limits.h>
+#include <sys/stat.h>
+#include <dirent.h>
 #include "ipCamGstCapt.h"
 #include "ipCamPrinting.h"
 
@@ -66,12 +68,17 @@ static gboolean handle_keyboard (GIOChannel *channel, GIOCondition cond, CustomD
             }
             break;
         case G_IO_STATUS_NORMAL: {
-            int index = g_ascii_strtoull (retString, NULL, 0);
-            if (index < 0 || index >= 8) {
-              g_printerr ("\nIndex out of bounds");
+            if (strcmp ("quit\n", retString) == 0) {
+                user_interrupt = TRUE;
+                gst_element_set_state (data->pipeline, GST_STATE_READY);
+                g_main_loop_quit (data->loop);
             } else {
-              /* If the input was a valid audio stream index, set the current audio stream */
-              g_print ("\nYou presses %d", index);
+                int index = g_ascii_strtoull (retString, NULL, 0);
+                if (index < 0 || index >= 8) {
+                  g_printerr ("Index out of bounds\n");
+                } else {
+                  g_print ("You presses %d\n", index);
+                }
             }
             break;
         }
@@ -252,17 +259,15 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
 
         case GST_MESSAGE_ELEMENT:
             //g_print ("\nElement message [%s][%s][%s] received.", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg), gst_structure_get_name (gst_message_get_structure (msg)));
-            if (strcmp("splitmuxsink-fragment-opened", gst_structure_get_name (gst_message_get_structure (msg))) == 0){
-                data->file_is_open = TRUE;
-                data->current_opened_file = strcpy(openedfilename, gst_structure_get_string (gst_message_get_structure (msg), "location"));
+            if (strcmp ("splitmuxsink-fragment-opened", gst_structure_get_name (gst_message_get_structure (msg))) == 0){
+                strcpy (openedfilename, gst_structure_get_string (gst_message_get_structure (msg), "location"));
                 g_print ("\nCapture filename just opened is: [%s]", openedfilename);
             }
-            if (strcmp("splitmuxsink-fragment-closed", gst_structure_get_name (gst_message_get_structure (msg))) == 0){
-                data->file_is_open = FALSE;
-                data->current_closed_file = strcpy(closedfilename, gst_structure_get_string (gst_message_get_structure (msg), "location"));
+            if (strcmp ("splitmuxsink-fragment-closed", gst_structure_get_name (gst_message_get_structure (msg))) == 0){
+                strcpy (closedfilename, gst_structure_get_string (gst_message_get_structure (msg), "location"));
                 g_print ("\nCapture filename just closed is: [%s]", closedfilename);
-                move_to_upload_directory(data);
                 /* move it to the ftp upload directory to keep it safe */
+                move_to_upload_directory(data);
             }
             break;
 
@@ -339,12 +344,6 @@ static gboolean watch_mainloop_timer_expired (CustomData *data) {
         /* Once the stream is blocked send a EOS signal to decently close the capture files */
         gst_pad_add_probe (data->blockpad, GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM, pad_probe_cb, data->decoder, NULL);
     }
-    if ( data->file_is_open ) {
-        g_print ("o");
-    } else {
-        g_print ("c");
-    }
-
     return TRUE; /* Otherwise the callback will be cancelled */
 }
 
@@ -373,12 +372,64 @@ static gboolean move_to_upload_directory(CustomData *data) {
     time (&seconds_since_epoch); /* See https://www.tutorialspoint.com/c_standard_library/c_function_time.htm */
     time_info = localtime (&seconds_since_epoch); /* See https://www.tutorialspoint.com/c_standard_library/c_function_localtime.htm */
     strftime (time_string, 20, "%Y_%m_%d_%H_%M_%S", time_info); /* See https://www.tutorialspoint.com/c_standard_library/c_function_strftime.htm */
-    g_print ("\nFormatted time_string is [%s]", time_string);
-    
-    if (rename (closedfilename, "/home/harm/github/ip-cam/upl/harm.mp4") == -1) {
+    //g_print ("\nFormatted time_string is [%s]", time_string);
+
+    /* Concatenate the upload file name */
+    strcpy (upload_file, uploads_dir); strcat (upload_file, "/"); strcat (upload_file, time_string); strcat (upload_file, ".mp4");
+    if (rename (closedfilename, upload_file) == -1) {
         g_printerr ("\nrename returned error [%s]", strerror (errno));
+    } else {
+        g_print("\nSuccesfully moved file [%s] to [%s]", closedfilename, upload_file);
     }
     return TRUE;
+}
+
+/* test if directory exists (1 success, -1 does not exist, -2 not dir) */
+static int is_dir (const char *dir_to_test) {
+    DIR *dirptr;
+
+    if (access (dir_to_test, F_OK) != -1 ) {
+        // file exists
+        if ((dirptr = opendir (dir_to_test)) != NULL) {
+            closedir (dirptr);
+        } else {
+            return -2; /* dir_to_test exists, but not dir */
+        }
+    } else {
+        return -1;     /* dir_to_test does not exist */
+    }
+    return 1;
+}
+
+/* Prepare a directory (0 success, -1 error upon creation, -2 not dir) */
+static int prepare_dir (const char *dir_to_create) {
+    int retval = 0;
+
+    switch (is_dir (dir_to_create)) {
+        case -2: { // not a dir
+            g_printerr ("\n[%s] is not a valid directory.", dir_to_create);
+            retval = -2;
+            break;
+        }
+       case -1: { // does not exist
+            if (mkdir (dir_to_create, 0777) == -1) {
+                g_printerr ("\nmkdir returned error [%s].", strerror (errno));
+                retval = -1;
+            } else {
+                g_print("\nSuccesfully created directory [%s]", dir_to_create);
+                retval = 0;
+            }
+            break;
+       }
+        case 1: { // exists
+                g_print("\nDirectory [%s] already exists.", dir_to_create);
+                retval = 0;
+            break;
+        }
+        default:
+            break;
+    }
+    return (retval);
 }
 
 int main(int argc, char *argv[]) {
@@ -396,7 +447,9 @@ int main(int argc, char *argv[]) {
     /* Initialize our data structure */
     memset (&data, 0, sizeof (data));
     memset (capture_dir, '\0', sizeof (capture_dir));
+    memset (capture_file, '\0', sizeof (capture_file));
     memset (uploads_dir, '\0', sizeof (uploads_dir));
+    memset (upload_file, '\0', sizeof (upload_file));
     memset (openedfilename, '\0', sizeof (openedfilename));
     memset (closedfilename, '\0', sizeof (closedfilename));
 
@@ -405,22 +458,33 @@ int main(int argc, char *argv[]) {
         g_print ("\nuser-name [%s]", argv[2]);
         g_print ("\npassword [%s]", argv[3]);
     } else {
-        g_print ("\nToo little parameters. Please supply URI, user name and password.");
+        g_printerr ("\nToo little parameters. Please supply URI, user name and password.");
         exit (-2);
     }
 
-    // Determine the current working directory
+    // Determine the current working directory and prepare it
     working_dir = getcwd (NULL, 0);
     if (working_dir != NULL) {
         g_print ("\nCurrent working dir: [%s][%lu]", working_dir, strlen (working_dir));
-        strcpy (capture_dir, working_dir);
-        strcpy (uploads_dir, working_dir);
-        strcat (capture_dir, "/rec");
-        strcat (uploads_dir, "/upl");
-        g_print ("\nCapture dir: [%s][%lu]", capture_dir, strlen (capture_dir));
-        g_print ("\nUploads dir: [%s][%lu]", uploads_dir, strlen (uploads_dir));
+        strcpy (capture_dir, working_dir); strcat (capture_dir, capture_subdir);
+        strcpy (uploads_dir, working_dir); strcat (uploads_dir, uploads_subdir);
+        if (prepare_dir (capture_dir) == 0) {
+            g_print ("\nDirectory [%s] is available", capture_dir);
+        } else {
+            g_printerr ("\nDirectory [%s] is NOT available", capture_dir);
+            exit (-4);
+        }
+        if (prepare_dir (uploads_dir) == 0) {
+            g_print ("\nDirectory [%s] is available", uploads_dir);
+        } else {
+            g_printerr ("\nDirectory [%s] is NOT available", uploads_dir);
+            exit (-4);
+        }
+        // "/home/harm/github/ip-cam/rec%03d.mp4"
+        strcpy (capture_file, capture_dir); strcat (capture_file, "/"); strcat (capture_file, "rec%03d.mp4");
+        g_print ("\nCapture file is [%s]", capture_file);
     } else {
-        g_print ("\nCould not find the current working directory.");
+        g_printerr ("\nCould not find the current working directory.");
         exit (-3);
     }
 
@@ -511,7 +575,7 @@ int main(int argc, char *argv[]) {
         //g_object_set (data.parser, "output-format", 1, NULL);
         //g_object_set (data.parser, "config-interval", -1, NULL);
 
-        g_object_set (data.splitsink, "location", "/home/harm/github/ip-cam/rec%03d.mp4", NULL);
+        g_object_set (data.splitsink, "location", capture_file, NULL);
         g_object_set (data.splitsink, "max-size-bytes", (150 * 1048576), NULL); // in bytes. 0 = disable, default is 0
         g_object_set (data.splitsink, "max-size-time", (5 * 60 * GST_SECOND), NULL); // in nanoseconds. 0 = disable, default is 0
         g_object_set (data.splitsink, "max-files", 30, NULL); // default is 0
@@ -556,11 +620,6 @@ int main(int argc, char *argv[]) {
         gst_object_unref (bus);
         gst_element_set_state (data.pipeline, GST_STATE_NULL);
         gst_object_unref (data.pipeline);
-        
-        /* If there was an Error or EOS, due to user interrupt, check for existing recording file */
-        /* If so move it to the ftp upload directory to keep it safe */
-        
-        
     }
 
     /* Free resources */

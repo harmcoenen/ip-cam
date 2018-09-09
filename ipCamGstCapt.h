@@ -2,8 +2,12 @@
 #define IPCAMGSTCAPT_H
 
 char *working_dir = NULL;
+const char *capture_subdir = "/rec";
+const char *uploads_subdir = "/upl";
 char capture_dir[PATH_MAX];
+char capture_file[PATH_MAX];
 char uploads_dir[PATH_MAX];
+char upload_file[PATH_MAX];
 char openedfilename[PATH_MAX];
 char closedfilename[PATH_MAX];
 
@@ -26,9 +30,6 @@ typedef struct _CustomData {
     GstElement *sink;
     GstElement *splitsink;
     GstPad *blockpad;
-    gboolean file_is_open;
-    gchar *current_opened_file;
-    gchar *current_closed_file;
 } CustomData;
 
 static void handle_pad_added (GstElement *src, GstPad *new_pad, CustomData *data);
@@ -40,5 +41,7 @@ static gboolean watch_mainloop_timer_expired (CustomData *data);
 static void handle_interrupt_signal(int signal);
 
 static gboolean move_to_upload_directory(CustomData *data);
+static int is_dir (const char *dir_to_test);
+static int prepare_dir (const char *dir_to_create);
 
 #endif /* IPCAMGSTCAPT_H */
