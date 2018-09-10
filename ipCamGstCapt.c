@@ -12,6 +12,7 @@
 #include <dirent.h>
 #include "ipCamGstCapt.h"
 #include "ipCamPrinting.h"
+#include "ipCamFTP.h"
 
 /* This function will be called by the pad-added signal */
 static void handle_pad_added (GstElement *src, GstPad *new_pad, CustomData *data) {
@@ -333,7 +334,7 @@ static gboolean timer_expired (CustomData *data) {
     g_print ("\nTimer_expired");
     
     /* Start check for files to upload */
-    
+    ftp_upload_file ("/home/harm/github/ip-cam/upl/test.mp4", username_passwd);
     return TRUE; /* Otherwise the callback will be cancelled */
 }
 
@@ -452,11 +453,14 @@ int main(int argc, char *argv[]) {
     memset (upload_file, '\0', sizeof (upload_file));
     memset (openedfilename, '\0', sizeof (openedfilename));
     memset (closedfilename, '\0', sizeof (closedfilename));
+    memset (username_passwd, '\0', sizeof (username_passwd));
 
     if (argc > 3){
         g_print ("\nURI [%s]", argv[1]);
         g_print ("\nuser-name [%s]", argv[2]);
         g_print ("\npassword [%s]", argv[3]);
+        strcpy (username_passwd, argv[2]); strcat (username_passwd, ":"); strcat (username_passwd, argv[3]);
+        g_print ("\ncombi is [%s]", username_passwd);
     } else {
         g_printerr ("\nToo little parameters. Please supply URI, user name and password.");
         exit (-2);

@@ -10,7 +10,7 @@ char uploads_dir[PATH_MAX];
 char upload_file[PATH_MAX];
 char openedfilename[PATH_MAX];
 char closedfilename[PATH_MAX];
-
+char username_passwd[25];
 static gboolean user_interrupt = FALSE;
 
 /* Structure to contain all our information, so we can pass it to callbacks */
