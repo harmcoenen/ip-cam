@@ -17,7 +17,6 @@ static gboolean user_interrupt = FALSE;
 typedef struct _CustomData {
     GMainLoop *loop;
     gboolean is_live;
-    gboolean timer_expired;
     GstElement *pipeline;
     GstElement *source;
     GstElement *depay;
@@ -36,11 +35,12 @@ static void handle_pad_added (GstElement *src, GstPad *new_pad, CustomData *data
 static gboolean handle_keyboard (GIOChannel *channel, GIOCondition cond, CustomData *data);
 static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data);
 static GstPadProbeReturn pad_probe_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data);
+static void what_time_is_it (char *newtime);
 static gboolean timer_expired (CustomData *data);
 static gboolean watch_mainloop_timer_expired (CustomData *data);
-static void handle_interrupt_signal(int signal);
+static void handle_interrupt_signal (int signal);
 
-static gboolean move_to_upload_directory(CustomData *data);
+static gboolean move_to_upload_directory (CustomData *data);
 static int is_dir (const char *dir_to_test);
 static int prepare_dir (const char *dir_to_create);
 

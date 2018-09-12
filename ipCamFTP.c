@@ -12,13 +12,8 @@
 #endif
 #include "ipCamFTP.h"
 
-#define UPLOAD_FILE_AS  "while-uploading.txt"
-#define REMOTE_URL      "ftp://ftp.familiecoenen.nl/"  UPLOAD_FILE_AS
-#define RENAME_FILE_TO  "renamed-and-fine.txt"
-
-/* ftp.familiecoenen.nl port 21 */
-/* /public/www/recordings */
-
+/* ftp.familiecoenen.nl port 21, /public/www/recordings */
+const char *remote_url = "ftp://ftp.familiecoenen.nl/";
 
 /* NOTE: if you want this example to work on Windows with libcurl as a
    DLL, you MUST also provide a read callback with CURLOPT_READFUNCTION.
@@ -37,7 +32,7 @@ static size_t read_callback (void *ptr, size_t size, size_t nmemb, void *stream)
   return retcode;
 }
  
-int ftp_upload_file (const char *filename, const char *usrpwd) {
+int ftp_upload_file (const char *pathfilename, const char *filename, const char *usrpwd) {
     CURL *curl;
     CURLcode res;
     FILE *hd_src;
@@ -45,12 +40,15 @@ int ftp_upload_file (const char *filename, const char *usrpwd) {
     curl_off_t fsize;
 
     struct curl_slist *headerlist = NULL;
-    static const char buf_1 [] = "RNFR " UPLOAD_FILE_AS;
-    static const char buf_2 [] = "RNTO " RENAME_FILE_TO;
+    static const char buf_1 [] = "RNFR uploadfile.txt";
+    static const char buf_2 [] = "RNTO renamedfile.txt";
+    static char remote_url_and_file[60];
+
+    strcpy (remote_url_and_file, remote_url); strcat (remote_url_and_file, filename);
 
     /* get the file size of the local file */ 
-    if (stat (filename, &file_info)) {
-        printf ("\nCouldn't open '%s': %s", filename, strerror(errno));
+    if (stat (pathfilename, &file_info)) {
+        printf ("\nCouldn't open '%s': %s", pathfilename, strerror(errno));
         return 1;
     }
     fsize = (curl_off_t)file_info.st_size;
@@ -58,7 +56,7 @@ int ftp_upload_file (const char *filename, const char *usrpwd) {
     printf ("\nLocal file size: %" CURL_FORMAT_CURL_OFF_T " bytes.", fsize);
 
     /* get a FILE * of the same file */ 
-    hd_src = fopen(filename, "rb");
+    hd_src = fopen(pathfilename, "rb");
 
     /* In windows, this will init the winsock stuff */ 
     curl_global_init (CURL_GLOBAL_ALL);
@@ -77,11 +75,11 @@ int ftp_upload_file (const char *filename, const char *usrpwd) {
         curl_easy_setopt (curl, CURLOPT_UPLOAD, 1L);
 
         /* specify target */ 
-        curl_easy_setopt (curl, CURLOPT_URL, REMOTE_URL);
+        curl_easy_setopt (curl, CURLOPT_URL, remote_url_and_file);
         curl_easy_setopt (curl, CURLOPT_USERPWD, usrpwd);
 
         /* pass in that last of FTP commands to run after the transfer */ 
-        curl_easy_setopt (curl, CURLOPT_POSTQUOTE, headerlist);
+        //curl_easy_setopt (curl, CURLOPT_POSTQUOTE, headerlist);
 
         /* now specify which file to upload */ 
         curl_easy_setopt (curl, CURLOPT_READDATA, hd_src);
@@ -96,7 +94,8 @@ int ftp_upload_file (const char *filename, const char *usrpwd) {
         curl_easy_setopt (curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t)fsize);
 
         /* Enable verbose logging */
-        curl_easy_setopt (curl, CURLOPT_VERBOSE, 1);
+        //curl_easy_setopt (curl, CURLOPT_VERBOSE, 1);
+        curl_easy_setopt (curl, CURLOPT_VERBOSE, 0);
 
         /* Now run off and do what you've been told! */ 
         res = curl_easy_perform (curl);

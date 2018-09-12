@@ -328,13 +328,49 @@ static GstPadProbeReturn pad_probe_cb (GstPad * pad, GstPadProbeInfo * info, gpo
     return GST_PAD_PROBE_REMOVE;
 }
 
+
+int get_list_of_files_to_upload (CustomData *data) {
+    struct dirent *de;
+    int n_files = 0;
+
+    DIR *dr = opendir(uploads_dir); 
+    if (dr == NULL) {
+        g_print ("\nCould not open current directory");
+        return 0;
+    }
+    while ((de = readdir(dr)) != NULL) {
+        n_files++;
+        g_print ("\nFound file to upload: [%s]", de->d_name);
+    }
+    closedir (dr);
+    return (n_files);
+}
+
+static void what_time_is_it (char *newtime) {
+    time_t seconds_since_epoch;
+    struct tm *time_info;
+    char time_string[20];
+
+    /* The function time_t time(time_t *seconds) returns the time since the Epoch (00:00:00 UTC, January 1, 1970), measured in seconds. */
+    /* If seconds is not NULL, the return value is also stored in variable seconds. */
+    time (&seconds_since_epoch); /* See https://www.tutorialspoint.com/c_standard_library/c_function_time.htm */
+    time_info = localtime (&seconds_since_epoch); /* See https://www.tutorialspoint.com/c_standard_library/c_function_localtime.htm */
+    strftime (time_string, 20, "%Y_%m_%d_%H_%M_%S", time_info); /* See https://www.tutorialspoint.com/c_standard_library/c_function_strftime.htm */
+    strcpy (newtime, time_string);
+}
+
 /* This function is called periodically */
 static gboolean timer_expired (CustomData *data) {
-    data->timer_expired = TRUE;
+    char time_string[20];
+
     g_print ("\nTimer_expired");
-    
-    /* Start check for files to upload */
-    ftp_upload_file ("/home/harm/github/ip-cam/upl/test.mp4", username_passwd);
+
+    if (get_list_of_files_to_upload (data) > 0) {
+        what_time_is_it (time_string); g_print ("\nTime now is: [%s]", time_string);
+        ftp_upload_file ("/home/harm/github/ip-cam/upl/2018_09_11_23_01_11.mp4", "2018_09_11_23_01_11.mp4", username_passwd);
+        what_time_is_it (time_string); g_print ("\nTime now is: [%s]", time_string);
+    }
+    return FALSE;
     return TRUE; /* Otherwise the callback will be cancelled */
 }
 
@@ -348,7 +384,7 @@ static gboolean watch_mainloop_timer_expired (CustomData *data) {
     return TRUE; /* Otherwise the callback will be cancelled */
 }
 
-static void handle_interrupt_signal(int signal) {
+static void handle_interrupt_signal (int signal) {
     switch (signal) {
         case SIGINT:
             g_print ("\nCaught SIGINT");
@@ -363,17 +399,10 @@ static void handle_interrupt_signal(int signal) {
     }
 }
 
-static gboolean move_to_upload_directory(CustomData *data) {
-    time_t seconds_since_epoch;
-    struct tm *time_info;
+static gboolean move_to_upload_directory (CustomData *data) {
     char time_string[20];
 
-    /* The function time_t time(time_t *seconds) returns the time since the Epoch (00:00:00 UTC, January 1, 1970), measured in seconds. */
-    /* If seconds is not NULL, the return value is also stored in variable seconds. */
-    time (&seconds_since_epoch); /* See https://www.tutorialspoint.com/c_standard_library/c_function_time.htm */
-    time_info = localtime (&seconds_since_epoch); /* See https://www.tutorialspoint.com/c_standard_library/c_function_localtime.htm */
-    strftime (time_string, 20, "%Y_%m_%d_%H_%M_%S", time_info); /* See https://www.tutorialspoint.com/c_standard_library/c_function_strftime.htm */
-    //g_print ("\nFormatted time_string is [%s]", time_string);
+    what_time_is_it (time_string);
 
     /* Concatenate the upload file name */
     strcpy (upload_file, uploads_dir); strcat (upload_file, "/"); strcat (upload_file, time_string); strcat (upload_file, ".mp4");
@@ -433,7 +462,7 @@ static int prepare_dir (const char *dir_to_create) {
     return (retval);
 }
 
-int main(int argc, char *argv[]) {
+int main (int argc, char *argv[]) {
     CustomData data;
     GstBus *bus;
     GstCaps *caps;
@@ -505,11 +534,10 @@ int main(int argc, char *argv[]) {
 
     /* Register a function that GLib will call every x seconds */
     g_timeout_add_seconds (1, (GSourceFunc)watch_mainloop_timer_expired, &data);
-    g_timeout_add_seconds ((15 * 60), (GSourceFunc)timer_expired, &data);
+    g_timeout_add_seconds ((1 * 60), (GSourceFunc)timer_expired, &data);
 
     while (!user_interrupt) {
         runs++;
-        data.timer_expired = FALSE;
 
         /* Create the elements */
         data.source = gst_element_factory_make ("rtspsrc", "source");
