@@ -332,6 +332,7 @@ static GstPadProbeReturn pad_probe_cb (GstPad * pad, GstPadProbeInfo * info, gpo
 int get_list_of_files_to_upload (CustomData *data) {
     struct dirent *de;
     int n_files = 0;
+    gboolean file_found = FALSE;
 
     DIR *dr = opendir(uploads_dir); 
     if (dr == NULL) {
@@ -339,8 +340,15 @@ int get_list_of_files_to_upload (CustomData *data) {
         return 0;
     }
     while ((de = readdir(dr)) != NULL) {
-        n_files++;
-        g_print ("\nFound file to upload: [%s]", de->d_name);
+        if ((strcmp (".", de->d_name) != 0) && (strcmp ("..", de->d_name) != 0)) {
+            if (file_found == FALSE){
+                strcpy (upload_file, de->d_name);
+                file_found = TRUE;
+                g_print ("\nFound file to upload: [%s]", upload_file);
+            }
+            n_files++;
+            g_print ("\nFound another file to upload later: [%s]", de->d_name);
+        }
     }
     closedir (dr);
     return (n_files);
@@ -360,22 +368,31 @@ static void what_time_is_it (char *newtime) {
 }
 
 /* This function is called periodically */
-static gboolean timer_expired (CustomData *data) {
+static gboolean upload_timer (CustomData *data) {
     char time_string[20];
+    char upload_file_fullname[PATH_MAX];
 
-    g_print ("\nTimer_expired");
-
+    what_time_is_it (time_string); g_print ("\nUpload_timer expired at time: [%s]", time_string);
     if (get_list_of_files_to_upload (data) > 0) {
-        what_time_is_it (time_string); g_print ("\nTime now is: [%s]", time_string);
-        ftp_upload_file ("/home/harm/github/ip-cam/upl/2018_09_11_23_01_11.mp4", "2018_09_11_23_01_11.mp4", username_passwd);
-        what_time_is_it (time_string); g_print ("\nTime now is: [%s]", time_string);
+        what_time_is_it (time_string); g_print ("\nFTP start time [%s]", time_string);
+        strcpy (upload_file_fullname, uploads_dir); strcat (upload_file_fullname, "/"); strcat (upload_file_fullname, upload_file);
+        if (ftp_upload_file (upload_file_fullname, upload_file, username_passwd) == 0) {
+            g_print ("\nFile [%s] uploaded successfully", upload_file);
+            /* remove file if upload successfull */
+            if (remove (upload_file_fullname) == 0) {
+                g_print ("\nFile [%s] deleted successfully", upload_file_fullname);
+            } else {
+                g_print ("\nError: unable to delete file [%s]", upload_file_fullname);
+            }
+        }
+        what_time_is_it (time_string); g_print ("\nFTP stop time [%s]", time_string);
     }
-    return FALSE;
+
     return TRUE; /* Otherwise the callback will be cancelled */
 }
 
 /* This function is called periodically */
-static gboolean watch_mainloop_timer_expired (CustomData *data) {
+static gboolean mainloop_timer (CustomData *data) {
     if (user_interrupt) {
         /* Add a pad probe to the src pad and block the downstream */
         /* Once the stream is blocked send a EOS signal to decently close the capture files */
@@ -405,11 +422,11 @@ static gboolean move_to_upload_directory (CustomData *data) {
     what_time_is_it (time_string);
 
     /* Concatenate the upload file name */
-    strcpy (upload_file, uploads_dir); strcat (upload_file, "/"); strcat (upload_file, time_string); strcat (upload_file, ".mp4");
-    if (rename (closedfilename, upload_file) == -1) {
+    strcpy (preupl_file, uploads_dir); strcat (preupl_file, "/"); strcat (preupl_file, time_string); strcat (preupl_file, ".mp4");
+    if (rename (closedfilename, preupl_file) == -1) {
         g_printerr ("\nrename returned error [%s]", strerror (errno));
     } else {
-        g_print("\nSuccesfully moved file [%s] to [%s]", closedfilename, upload_file);
+        g_print("\nSuccesfully moved file [%s] to [%s]", closedfilename, preupl_file);
     }
     return TRUE;
 }
@@ -479,6 +496,7 @@ int main (int argc, char *argv[]) {
     memset (capture_dir, '\0', sizeof (capture_dir));
     memset (capture_file, '\0', sizeof (capture_file));
     memset (uploads_dir, '\0', sizeof (uploads_dir));
+    memset (preupl_file, '\0', sizeof (preupl_file));
     memset (upload_file, '\0', sizeof (upload_file));
     memset (openedfilename, '\0', sizeof (openedfilename));
     memset (closedfilename, '\0', sizeof (closedfilename));
@@ -533,8 +551,8 @@ int main (int argc, char *argv[]) {
     }
 
     /* Register a function that GLib will call every x seconds */
-    g_timeout_add_seconds (1, (GSourceFunc)watch_mainloop_timer_expired, &data);
-    g_timeout_add_seconds ((1 * 60), (GSourceFunc)timer_expired, &data);
+    g_timeout_add_seconds (1, (GSourceFunc)mainloop_timer, &data);
+    g_timeout_add_seconds ((10 * 60), (GSourceFunc)upload_timer, &data);
 
     while (!user_interrupt) {
         runs++;

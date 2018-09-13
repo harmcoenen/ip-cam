@@ -34,7 +34,7 @@ static size_t read_callback (void *ptr, size_t size, size_t nmemb, void *stream)
  
 int ftp_upload_file (const char *pathfilename, const char *filename, const char *usrpwd) {
     CURL *curl;
-    CURLcode res;
+    CURLcode res = 1; /* By default expect curl to fail */
     FILE *hd_src;
     struct stat file_info;
     curl_off_t fsize;
@@ -57,7 +57,7 @@ int ftp_upload_file (const char *pathfilename, const char *filename, const char 
 
     /* get a FILE * of the same file */ 
     hd_src = fopen(pathfilename, "rb");
-
+    
     /* In windows, this will init the winsock stuff */ 
     curl_global_init (CURL_GLOBAL_ALL);
 
@@ -95,8 +95,11 @@ int ftp_upload_file (const char *pathfilename, const char *filename, const char 
 
         /* Enable verbose logging */
         //curl_easy_setopt (curl, CURLOPT_VERBOSE, 1);
-        curl_easy_setopt (curl, CURLOPT_VERBOSE, 0);
-
+        curl_easy_setopt (curl, CURLOPT_VERBOSE, 0L);
+      
+        /* Enable progress meter */
+        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+        
         /* Now run off and do what you've been told! */ 
         res = curl_easy_perform (curl);
         /* Check for errors */ 
@@ -111,5 +114,5 @@ int ftp_upload_file (const char *pathfilename, const char *filename, const char 
 
     fclose (hd_src); /* close the local file */ 
     curl_global_cleanup ();
-    return 0;
+    return (res);
 }
