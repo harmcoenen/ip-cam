@@ -70,6 +70,7 @@ static gboolean handle_keyboard (GIOChannel *channel, GIOCondition cond, CustomD
             break;
         case G_IO_STATUS_NORMAL: {
             if (strcmp ("quit\n", retString) == 0) {
+                g_source_remove (upload_timer_id);
                 user_interrupt = TRUE;
                 gst_element_set_state (data->pipeline, GST_STATE_READY);
                 g_main_loop_quit (data->loop);
@@ -345,9 +346,10 @@ int get_list_of_files_to_upload (CustomData *data) {
                 strcpy (upload_file, de->d_name);
                 file_found = TRUE;
                 g_print ("\nFound file to upload: [%s]", upload_file);
+            } else {
+                g_print ("\nFound another file to upload later: [%s]", de->d_name);
             }
             n_files++;
-            g_print ("\nFound another file to upload later: [%s]", de->d_name);
         }
     }
     closedir (dr);
@@ -404,7 +406,8 @@ static gboolean mainloop_timer (CustomData *data) {
 static void handle_interrupt_signal (int signal) {
     switch (signal) {
         case SIGINT:
-            g_print ("\nCaught SIGINT");
+            g_print ("\nCaught SIGINT, please wait....");
+            g_source_remove (upload_timer_id);
             user_interrupt = TRUE;
             break;
         case SIGUSR1:
@@ -551,8 +554,8 @@ int main (int argc, char *argv[]) {
     }
 
     /* Register a function that GLib will call every x seconds */
-    g_timeout_add_seconds (1, (GSourceFunc)mainloop_timer, &data);
-    g_timeout_add_seconds ((10 * 60), (GSourceFunc)upload_timer, &data);
+    mainloop_timer_id = g_timeout_add_seconds (1, (GSourceFunc)mainloop_timer, &data);
+    upload_timer_id = g_timeout_add_seconds (60, (GSourceFunc)upload_timer, &data);
 
     while (!user_interrupt) {
         runs++;

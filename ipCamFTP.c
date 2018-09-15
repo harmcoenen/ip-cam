@@ -20,16 +20,12 @@ const char *remote_url = "ftp://ftp.familiecoenen.nl/";
    Failing to do so will give you a crash since a DLL may not use the
    variable's memory when passed in to it from an app like this. */ 
 static size_t read_callback (void *ptr, size_t size, size_t nmemb, void *stream) {
-  curl_off_t nread;
-  /* in real-world cases, this would probably get this data differently
-     as this fread() stuff is exactly what the library already would do
-     by default internally */ 
-  size_t retcode = fread (ptr, size, nmemb, stream);
- 
-  nread = (curl_off_t)retcode;
- 
-  fprintf (stderr, "\nRead %" CURL_FORMAT_CURL_OFF_T " bytes from file.", nread);
-  return retcode;
+    curl_off_t nread;
+
+    size_t retcode = fread (ptr, size, nmemb, stream);
+    nread = (curl_off_t)retcode;
+//    fprintf (stderr, "\nRead %" CURL_FORMAT_CURL_OFF_T " bytes from file.", nread);
+    return retcode;
 }
  
 int ftp_upload_file (const char *pathfilename, const char *filename, const char *usrpwd) {
@@ -94,11 +90,10 @@ int ftp_upload_file (const char *pathfilename, const char *filename, const char 
         curl_easy_setopt (curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t)fsize);
 
         /* Enable verbose logging */
-        //curl_easy_setopt (curl, CURLOPT_VERBOSE, 1);
         curl_easy_setopt (curl, CURLOPT_VERBOSE, 0L);
       
         /* Enable progress meter */
-        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
         
         /* Now run off and do what you've been told! */ 
         res = curl_easy_perform (curl);

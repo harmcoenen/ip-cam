@@ -13,6 +13,8 @@ char openedfilename[PATH_MAX];
 char closedfilename[PATH_MAX];
 char username_passwd[25];
 static gboolean user_interrupt = FALSE;
+guint mainloop_timer_id;
+guint upload_timer_id;
 
 /* Structure to contain all our information, so we can pass it to callbacks */
 typedef struct _CustomData {
