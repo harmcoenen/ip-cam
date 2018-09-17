@@ -280,7 +280,9 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
                 gst_message_parse_state_changed (msg, &old_state, &new_state, &pending_state);
                 g_print ("\nPipeline state changed from %s to %s", gst_element_state_get_name (old_state), gst_element_state_get_name (new_state));
                 /* Print the current capabilities of the sink element */
-                //print_pad_capabilities (data->convert, "sink");
+                print_pad_capabilities (data->source, "recv_rtp_src_0_927769117_96");
+                print_pad_capabilities (data->source, "recv_rtp_src_1_2963555782_0");
+                print_pad_capabilities (data->depay, "sink");
                 //print_pad_capabilities (data->encoder, "sink");
                 //print_pad_capabilities (data->parser, "sink");
                 //print_pad_capabilities (data->splitsink, "video");
