@@ -24,30 +24,29 @@ static void handle_pad_added (GstElement *src, GstPad *new_pad, CustomData *data
 
     g_print ("\nReceived new pad '%s' from '%s'", GST_PAD_NAME (new_pad), GST_ELEMENT_NAME (src));
 
-    /* If our converter is already linked, we have nothing to do here */
-    if (gst_pad_is_linked (sink_pad)) {
-        g_print ("\nWe are already linked. Ignoring.");
-        goto exit;
-    }
-
-    /* Check the new pad's type */
-    new_pad_caps = gst_pad_get_current_caps (new_pad);
-    new_pad_struct = gst_caps_get_structure (new_pad_caps, 0);
-    new_pad_type = gst_structure_get_name (new_pad_struct);
-    if (!g_str_has_prefix (new_pad_type, "application/x-rtp")) {
-        g_print ("\nIt has type '%s' which is not application/x-rtp. Ignoring.", new_pad_type);
-        goto exit;
-    }
-
-    /* Attempt the link */
-    ret = gst_pad_link (new_pad, sink_pad);
-    if (GST_PAD_LINK_FAILED (ret)) {
-        g_print ("\nType is '%s' but link failed.", new_pad_type);
+    /* Only try to link if the sink pad is not yet linked */
+    if (!gst_pad_is_linked (sink_pad)) {
+        /* Check the new pad's type */
+        new_pad_caps = gst_pad_get_current_caps (new_pad);
+        new_pad_struct = gst_caps_get_structure (new_pad_caps, 0);
+        new_pad_type = gst_structure_get_name (new_pad_struct);
+        if (g_str_has_prefix (new_pad_type, "application/x-rtp")) {
+            /* Attempt the link */
+            ret = gst_pad_link (new_pad, sink_pad);
+            if (GST_PAD_LINK_SUCCESSFUL (ret)) {
+                g_print ("\nLink for video succeeded.");
+                strcpy (src_video_padname, GST_PAD_NAME (new_pad));
+                print_pad_capabilities (data->source, src_video_padname);
+            } else {
+                g_print ("\nLink for video failed.");
+            }
+        } else {
+            g_print ("\nNew added pad has type '%s' which is not application/x-rtp. Ignoring.", new_pad_type);
+        }
     } else {
-        g_print ("\nLink succeeded (type '%s').", new_pad_type);
+        g_print ("\nDepay sink pad is already linked to Source src pad. Ignore this new added pad.");
     }
 
-exit:
     if (new_pad_caps != NULL) gst_caps_unref (new_pad_caps);
     gst_object_unref (sink_pad);
 }
@@ -279,13 +278,12 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
                 GstState old_state, new_state, pending_state;
                 gst_message_parse_state_changed (msg, &old_state, &new_state, &pending_state);
                 g_print ("\nPipeline state changed from %s to %s", gst_element_state_get_name (old_state), gst_element_state_get_name (new_state));
-                /* Print the current capabilities of the sink element */
-                print_pad_capabilities (data->source, "recv_rtp_src_0_927769117_96");
-                print_pad_capabilities (data->source, "recv_rtp_src_1_2963555782_0");
+                /* Print the current capabilities of the source pad */
+                if (new_state == GST_STATE_PLAYING) {
+                    print_pad_capabilities (data->source, src_video_padname);
+                }
+                /* Print the current capabilities of a sink pad */
                 print_pad_capabilities (data->depay, "sink");
-                //print_pad_capabilities (data->encoder, "sink");
-                //print_pad_capabilities (data->parser, "sink");
-                //print_pad_capabilities (data->splitsink, "video");
             }
             break;
 
@@ -498,6 +496,7 @@ int main (int argc, char *argv[]) {
 
     /* Initialize our data structure */
     memset (&data, 0, sizeof (data));
+    memset (src_video_padname, '\0', sizeof (src_video_padname));
     memset (capture_dir, '\0', sizeof (capture_dir));
     memset (capture_file, '\0', sizeof (capture_file));
     memset (uploads_dir, '\0', sizeof (uploads_dir));
@@ -514,8 +513,8 @@ int main (int argc, char *argv[]) {
         strcpy (username_passwd, argv[2]); strcat (username_passwd, ":"); strcat (username_passwd, argv[3]);
         g_print ("\ncombi is [%s]", username_passwd);
     } else {
-        g_printerr ("\nToo little parameters. Please supply URI, user name and password.");
-        exit (-2);
+        g_printerr ("\nToo little parameters. Please supply URI, user name and password.\n");
+        return -1;
     }
 
     // Determine the current working directory and prepare it
@@ -527,21 +526,21 @@ int main (int argc, char *argv[]) {
         if (prepare_dir (capture_dir) == 0) {
             g_print ("\nDirectory [%s] is available", capture_dir);
         } else {
-            g_printerr ("\nDirectory [%s] is NOT available", capture_dir);
-            exit (-4);
+            g_printerr ("\nDirectory [%s] is NOT available\n", capture_dir);
+            return -1;
         }
         if (prepare_dir (uploads_dir) == 0) {
             g_print ("\nDirectory [%s] is available", uploads_dir);
         } else {
-            g_printerr ("\nDirectory [%s] is NOT available", uploads_dir);
-            exit (-4);
+            g_printerr ("\nDirectory [%s] is NOT available\n", uploads_dir);
+            return -1;
         }
         // "/home/harm/github/ip-cam/rec%03d.mp4"
         strcpy (capture_file, capture_dir); strcat (capture_file, "/"); strcat (capture_file, "rec%03d.mp4");
         g_print ("\nCapture file is [%s]", capture_file);
     } else {
-        g_printerr ("\nCould not find the current working directory.");
-        exit (-3);
+        g_printerr ("\nCould not find the current working directory.\n");
+        return -1;
     }
 
     // Setup the signal handler
@@ -580,17 +579,19 @@ int main (int argc, char *argv[]) {
         /* Create the empty pipeline */
         data.pipeline = gst_pipeline_new ("my-pipeline");
 
-        if (!data.pipeline || !data.source || !data.depay || !data.decoder || !data.convert || !data.scale || !data.encoder || !data.parser || !data.muxer || !data.sink || !data.splitsink) {
-            g_printerr ("\nNot all elements could be created.");
+        if (!data.pipeline || !data.source || !data.depay || !data.decoder || !data.convert || 
+            !data.scale || !data.encoder || !data.parser || !data.muxer || !data.sink || !data.splitsink) {
+            g_printerr ("\nNot all elements could be created.\n");
             return -1;
         }
 
         /* Build the pipeline. */
-        gst_bin_add_many (GST_BIN (data.pipeline), data.source, data.depay, data.decoder, data.convert, data.scale, data.encoder, data.parser, data.splitsink, NULL);
+        gst_bin_add_many (GST_BIN (data.pipeline), data.source, data.depay, data.decoder, data.convert, 
+                            data.scale, data.encoder, data.parser, data.splitsink, NULL);
 
         /* Note that we are NOT linking the source at this point. We will do it later. */
         if (!gst_element_link_many (data.depay, data.decoder, data.convert, data.scale, NULL)) {
-            g_printerr ("\nElement link problem.");
+            g_printerr ("\nElements for first part of video path could not be linked.\n");
             gst_object_unref (data.pipeline);
             return -1;
         }
@@ -602,7 +603,7 @@ int main (int argc, char *argv[]) {
         //caps = gst_caps_from_string("video/x-raw, width=1280, height=720"); // Change scale from HD 1080 to HD 720
         caps = gst_caps_from_string ("video/x-raw, width=1024, height=576"); // Change scale from HD 1080 to PAL
         if (!gst_element_link_filtered (data.scale, data.encoder, caps)) {
-            g_printerr ("\nElement scale could not be linked to element tee.");
+            g_printerr ("\nElement scale could not be linked to element encoder.\n");
             gst_object_unref (data.pipeline);
             return -1;
         }
@@ -610,7 +611,7 @@ int main (int argc, char *argv[]) {
 
         /* Link the rest of the pipeline */
         if (!gst_element_link_many (data.encoder, data.parser, data.splitsink, NULL)) {
-            g_printerr ("\nRest of elements link problem.");
+            g_printerr ("\nElements for last part of video path could not be linked.\n");
             gst_object_unref (data.pipeline);
             return -1;
         }
@@ -622,13 +623,6 @@ int main (int argc, char *argv[]) {
         g_object_set (data.source, "user-pw", argv[3], NULL);
 
         g_object_set (data.encoder, "tune", 4, NULL); /* important, the encoder usually takes 1-3 seconds to process this. Queue buffer is generally upto 1 second. Hence, set tune=zerolatency (0x4) */
-        //g_object_set (data.encoder, "pass", 5, NULL);
-        //g_object_set (data.encoder, "qp-min", 18, NULL);
-
-        //g_object_set (data.parser, "split-packetized", TRUE, NULL);
-        //g_object_set (data.parser, "access-unit", TRUE, NULL);
-        //g_object_set (data.parser, "output-format", 1, NULL);
-        //g_object_set (data.parser, "config-interval", -1, NULL);
 
         g_object_set (data.splitsink, "location", capture_file, NULL);
         g_object_set (data.splitsink, "max-size-bytes", (150 * 1048576), NULL); // in bytes. 0 = disable, default is 0
@@ -643,7 +637,7 @@ int main (int argc, char *argv[]) {
         g_print ("\nGo to PLAYING, run [%d]", runs);
         ret = gst_element_set_state (data.pipeline, GST_STATE_PLAYING);
         if (ret == GST_STATE_CHANGE_FAILURE) {
-            g_printerr ("\nUnable to set the pipeline to the playing state.");
+            g_printerr ("\nUnable to set the pipeline to the playing state.\n");
             gst_object_unref (data.pipeline);
             return -1;
         } else if (ret == GST_STATE_CHANGE_NO_PREROLL) {

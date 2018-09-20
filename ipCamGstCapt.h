@@ -4,6 +4,7 @@
 char *working_dir = NULL;
 const char *capture_subdir = "/rec";
 const char *uploads_subdir = "/upl";
+char src_video_padname[50];
 char capture_dir[PATH_MAX];
 char capture_file[PATH_MAX];
 char uploads_dir[PATH_MAX];
