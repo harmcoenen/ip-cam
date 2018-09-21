@@ -2,8 +2,10 @@
 #define IPCAMGSTCAPT_H
 
 char *working_dir = NULL;
-const char *capture_subdir = "/rec";
+const char *capture_subdir = "/cap";
 const char *uploads_subdir = "/upl";
+const char *appl_video = "video";
+const char *appl_photo = "photo";
 char src_video_padname[50];
 char capture_dir[PATH_MAX];
 char capture_file[PATH_MAX];
@@ -17,8 +19,12 @@ static gboolean user_interrupt = FALSE;
 guint mainloop_timer_id;
 guint upload_timer_id;
 
+enum Application {VIDEO = 1, PHOTO = 2};
+
 /* Structure to contain all our information, so we can pass it to callbacks */
 typedef struct _CustomData {
+    enum Application appl;
+    guint appl_param;
     GMainLoop *loop;
     gboolean is_live;
     GstElement *pipeline;
@@ -47,5 +53,9 @@ static void handle_interrupt_signal (int signal);
 static gboolean move_to_upload_directory (CustomData *data);
 static int is_dir (const char *dir_to_test);
 static int prepare_dir (const char *dir_to_create);
+static int prepare_work_environment (void);
+static void initialize(CustomData *data);
+static void print_help(void);
+static int handle_arguments(int argc, char *argv[], CustomData *data);
 
 #endif /* IPCAMGSTCAPT_H */

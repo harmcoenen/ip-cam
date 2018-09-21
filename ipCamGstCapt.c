@@ -482,6 +482,93 @@ static int prepare_dir (const char *dir_to_create) {
     return (retval);
 }
 
+/* Prepare working environment (0 success, -1 error) */
+static int prepare_work_environment (void) {
+    int retval = 0;
+
+    // Determine the current working directory and prepare it
+    working_dir = getcwd (NULL, 0);
+    if (working_dir != NULL) {
+        g_print ("\nCurrent working dir: [%s][%lu]", working_dir, strlen (working_dir));
+        strcpy (capture_dir, working_dir); strcat (capture_dir, capture_subdir);
+        strcpy (uploads_dir, working_dir); strcat (uploads_dir, uploads_subdir);
+        if (prepare_dir (capture_dir) == 0) {
+            g_print ("\nDirectory [%s] is available", capture_dir);
+        } else {
+            g_printerr ("\nDirectory [%s] is NOT available", capture_dir);
+            retval = -1;
+        }
+        if (prepare_dir (uploads_dir) == 0) {
+            g_print ("\nDirectory [%s] is available", uploads_dir);
+        } else {
+            g_printerr ("\nDirectory [%s] is NOT available", uploads_dir);
+            retval = -1;
+        }
+        strcpy (capture_file, capture_dir); strcat (capture_file, "/"); strcat (capture_file, "rec%03d.mp4");
+        g_print ("\nCapture file is [%s]", capture_file);
+    } else {
+        g_printerr ("\nCould not find the current working directory.");
+        retval = -1;
+    }
+
+    return (retval);
+}
+
+/* Initialize data structures and arrays */
+static void initialize(CustomData *data) {
+    memset (&data, 0, sizeof (data));
+    memset (src_video_padname, '\0', sizeof (src_video_padname));
+    memset (capture_dir, '\0', sizeof (capture_dir));
+    memset (capture_file, '\0', sizeof (capture_file));
+    memset (uploads_dir, '\0', sizeof (uploads_dir));
+    memset (preupl_file, '\0', sizeof (preupl_file));
+    memset (upload_file, '\0', sizeof (upload_file));
+    memset (openedfilename, '\0', sizeof (openedfilename));
+    memset (closedfilename, '\0', sizeof (closedfilename));
+    memset (username_passwd, '\0', sizeof (username_passwd));
+}
+
+static void print_help(void) {
+    g_print ("\nIncorrect parameters detected. Please supply URI, user name, password, application and parameter.");
+    g_print ("\nFormat:");
+    g_print ("\n./ipCamGstCapt <rtsp uri> <username> <password> <application> <parameter>");
+    g_print ("\n\nExample that will capture videoclips of 5 minutes each:");
+    g_print ("\n./ipCamGstCapt rtsp://192.168.178.28:88/videoMain username 'password' video 5");
+    g_print ("\n\nExample that will capture a photo each 3 seconds:");
+    g_print ("\n./ipCamGstCapt rtsp://192.168.178.28:88/videoMain username 'password' photo 3");
+    g_print ("\n\n");
+}
+
+/* Handle initial arguments (0 success, -1 error) */
+static int handle_arguments(int argc, char *argv[], CustomData *data) {
+    int retval = 0;
+
+    if (argc > 5){
+        g_print ("\nURI [%s]", argv[1]);
+        g_print ("\nuser-name [%s]", argv[2]);
+        g_print ("\npassword [%s]", argv[3]);
+        strcpy (username_passwd, argv[2]); strcat (username_passwd, ":"); strcat (username_passwd, argv[3]);
+        g_print ("\ncombi is [%s]", username_passwd);
+        data->appl_param = atoi (argv[5]);
+        if (strcmp (argv[4], appl_video) == 0) {
+            data->appl = VIDEO;
+            g_print ("\napplication is video with parameter [%d]", data->appl_param);
+        } else if (strcmp (argv[4], appl_photo) == 0) {
+            data->appl = PHOTO;
+            g_print ("\napplication is photo with parameter [%d]", data->appl_param);
+        } else {
+            g_printerr ("\napplication [%s] is not yet supported.\n", argv[4]);
+            print_help();
+            retval = -1;
+        }
+    } else {
+        print_help();
+        retval = -1;
+    }
+
+    return (retval);
+}
+
 int main (int argc, char *argv[]) {
     CustomData data;
     GstBus *bus;
@@ -494,52 +581,16 @@ int main (int argc, char *argv[]) {
     /* Initialize GStreamer */
     gst_init (&argc, &argv);
 
-    /* Initialize our data structure */
-    memset (&data, 0, sizeof (data));
-    memset (src_video_padname, '\0', sizeof (src_video_padname));
-    memset (capture_dir, '\0', sizeof (capture_dir));
-    memset (capture_file, '\0', sizeof (capture_file));
-    memset (uploads_dir, '\0', sizeof (uploads_dir));
-    memset (preupl_file, '\0', sizeof (preupl_file));
-    memset (upload_file, '\0', sizeof (upload_file));
-    memset (openedfilename, '\0', sizeof (openedfilename));
-    memset (closedfilename, '\0', sizeof (closedfilename));
-    memset (username_passwd, '\0', sizeof (username_passwd));
+    /* Initialize data structures and arrays */
+    initialize(&data);
 
-    if (argc > 3){
-        g_print ("\nURI [%s]", argv[1]);
-        g_print ("\nuser-name [%s]", argv[2]);
-        g_print ("\npassword [%s]", argv[3]);
-        strcpy (username_passwd, argv[2]); strcat (username_passwd, ":"); strcat (username_passwd, argv[3]);
-        g_print ("\ncombi is [%s]", username_passwd);
-    } else {
-        g_printerr ("\nToo little parameters. Please supply URI, user name and password.\n");
+    if (handle_arguments(argc, argv, &data) != 0) {
+        g_print ("\n");
         return -1;
     }
 
-    // Determine the current working directory and prepare it
-    working_dir = getcwd (NULL, 0);
-    if (working_dir != NULL) {
-        g_print ("\nCurrent working dir: [%s][%lu]", working_dir, strlen (working_dir));
-        strcpy (capture_dir, working_dir); strcat (capture_dir, capture_subdir);
-        strcpy (uploads_dir, working_dir); strcat (uploads_dir, uploads_subdir);
-        if (prepare_dir (capture_dir) == 0) {
-            g_print ("\nDirectory [%s] is available", capture_dir);
-        } else {
-            g_printerr ("\nDirectory [%s] is NOT available\n", capture_dir);
-            return -1;
-        }
-        if (prepare_dir (uploads_dir) == 0) {
-            g_print ("\nDirectory [%s] is available", uploads_dir);
-        } else {
-            g_printerr ("\nDirectory [%s] is NOT available\n", uploads_dir);
-            return -1;
-        }
-        // "/home/harm/github/ip-cam/rec%03d.mp4"
-        strcpy (capture_file, capture_dir); strcat (capture_file, "/"); strcat (capture_file, "rec%03d.mp4");
-        g_print ("\nCapture file is [%s]", capture_file);
-    } else {
-        g_printerr ("\nCould not find the current working directory.\n");
+    if (prepare_work_environment() != 0) {
+        g_print ("\n");
         return -1;
     }
 
@@ -625,8 +676,8 @@ int main (int argc, char *argv[]) {
         g_object_set (data.encoder, "tune", 4, NULL); /* important, the encoder usually takes 1-3 seconds to process this. Queue buffer is generally upto 1 second. Hence, set tune=zerolatency (0x4) */
 
         g_object_set (data.splitsink, "location", capture_file, NULL);
-        g_object_set (data.splitsink, "max-size-bytes", (150 * 1048576), NULL); // in bytes. 0 = disable, default is 0
-        g_object_set (data.splitsink, "max-size-time", (5 * 60 * GST_SECOND), NULL); // in nanoseconds. 0 = disable, default is 0
+        g_object_set (data.splitsink, "max-size-bytes", (data.appl_param * 30 * 1048576), NULL); // in bytes. 0 = disable, default is 0. Maximum 30 MB per minute.
+        g_object_set (data.splitsink, "max-size-time", (data.appl_param * 60 * GST_SECOND), NULL); // in nanoseconds. 0 = disable, default is 0
         g_object_set (data.splitsink, "max-files", 30, NULL); // default is 0
         g_object_set (data.splitsink, "muxer", data.muxer, NULL);
 
