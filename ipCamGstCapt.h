@@ -1,11 +1,13 @@
 #ifndef IPCAMGSTCAPT_H
 #define IPCAMGSTCAPT_H
 
-char *working_dir = NULL;
 const char *capture_subdir = "/cap";
 const char *uploads_subdir = "/upl";
 const char *appl_video = "video";
 const char *appl_photo = "photo";
+const char *rec_filename="rec%03d";
+const char *extension_video = ".mp4";
+const char *extension_photo = ".jpeg";
 char src_video_padname[50];
 char capture_dir[PATH_MAX];
 char capture_file[PATH_MAX];
@@ -36,7 +38,7 @@ typedef struct _CustomData {
     GstElement *encoder;
     GstElement *parser;
     GstElement *muxer;
-    GstElement *sink;
+    GstElement *filesink;
     GstElement *splitsink;
     GstPad *blockpad;
 } CustomData;
@@ -49,13 +51,14 @@ static void what_time_is_it (char *newtime);
 static gboolean upload_timer (CustomData *data);
 static gboolean mainloop_timer (CustomData *data);
 static void handle_interrupt_signal (int signal);
-
 static gboolean move_to_upload_directory (CustomData *data);
 static int is_dir (const char *dir_to_test);
 static int prepare_dir (const char *dir_to_create);
-static int prepare_work_environment (void);
-static void initialize(CustomData *data);
-static void print_help(void);
-static int handle_arguments(int argc, char *argv[], CustomData *data);
+static int prepare_work_environment (CustomData *data);
+static void initialize (CustomData *data);
+static void print_help (void);
+static int handle_arguments (int argc, char *argv[], CustomData *data);
+static int create_video_pipeline (int argc, char *argv[], CustomData *data);
+static int create_photo_pipeline (int argc, char *argv[], CustomData *data);
 
 #endif /* IPCAMGSTCAPT_H */

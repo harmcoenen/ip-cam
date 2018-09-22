@@ -425,7 +425,12 @@ static gboolean move_to_upload_directory (CustomData *data) {
     what_time_is_it (time_string);
 
     /* Concatenate the upload file name */
-    strcpy (preupl_file, uploads_dir); strcat (preupl_file, "/"); strcat (preupl_file, time_string); strcat (preupl_file, ".mp4");
+    strcpy (preupl_file, uploads_dir); strcat (preupl_file, "/"); strcat (preupl_file, time_string);
+    if (data->appl == VIDEO) {
+        strcat (preupl_file, extension_video);
+    } else if (data->appl == PHOTO) {
+        strcat (preupl_file, extension_photo);
+    }
     if (rename (closedfilename, preupl_file) == -1) {
         g_printerr ("\nrename returned error [%s]", strerror (errno));
     } else {
@@ -446,7 +451,7 @@ static int is_dir (const char *dir_to_test) {
             return -2; /* dir_to_test exists, but not dir */
         }
     } else {
-        return -1;     /* dir_to_test does not exist */
+        return -1; /* dir_to_test does not exist */
     }
     return 1;
 }
@@ -456,12 +461,11 @@ static int prepare_dir (const char *dir_to_create) {
     int retval = 0;
 
     switch (is_dir (dir_to_create)) {
-        case -2: { // not a dir
+        case -2: // not a dir
             g_printerr ("\n[%s] is not a valid directory.", dir_to_create);
             retval = -2;
             break;
-        }
-       case -1: { // does not exist
+       case -1: // does not exist
             if (mkdir (dir_to_create, 0777) == -1) {
                 g_printerr ("\nmkdir returned error [%s].", strerror (errno));
                 retval = -1;
@@ -470,20 +474,20 @@ static int prepare_dir (const char *dir_to_create) {
                 retval = 0;
             }
             break;
-       }
-        case 1: { // exists
-                g_print("\nDirectory [%s] already exists.", dir_to_create);
-                retval = 0;
+        case 1: // exists
+            g_print("\nDirectory [%s] already exists.", dir_to_create);
+            retval = 0;
             break;
-        }
         default:
             break;
     }
+
     return (retval);
 }
 
 /* Prepare working environment (0 success, -1 error) */
-static int prepare_work_environment (void) {
+static int prepare_work_environment (CustomData *data) {
+    char *working_dir = NULL;
     int retval = 0;
 
     // Determine the current working directory and prepare it
@@ -504,8 +508,15 @@ static int prepare_work_environment (void) {
             g_printerr ("\nDirectory [%s] is NOT available", uploads_dir);
             retval = -1;
         }
-        strcpy (capture_file, capture_dir); strcat (capture_file, "/"); strcat (capture_file, "rec%03d.mp4");
+        strcpy (capture_file, capture_dir); strcat (capture_file, "/"); strcat (capture_file, rec_filename);
+        if (data->appl == VIDEO) {
+             strcat (capture_file, extension_video);
+        } else if (data->appl == PHOTO) {
+            strcat (capture_file, extension_photo);
+        }
         g_print ("\nCapture file is [%s]", capture_file);
+
+        free (working_dir);
     } else {
         g_printerr ("\nCould not find the current working directory.");
         retval = -1;
@@ -515,7 +526,7 @@ static int prepare_work_environment (void) {
 }
 
 /* Initialize data structures and arrays */
-static void initialize(CustomData *data) {
+static void initialize (CustomData *data) {
     memset (&data, 0, sizeof (data));
     memset (src_video_padname, '\0', sizeof (src_video_padname));
     memset (capture_dir, '\0', sizeof (capture_dir));
@@ -528,8 +539,8 @@ static void initialize(CustomData *data) {
     memset (username_passwd, '\0', sizeof (username_passwd));
 }
 
-static void print_help(void) {
-    g_print ("\nIncorrect parameters detected. Please supply URI, user name, password, application and parameter.");
+static void print_help (void) {
+    g_print ("\n\033[4;031mIncorrect parameters detected.\033[0m Please supply URI, user name, password, application and parameter.");
     g_print ("\nFormat:");
     g_print ("\n./ipCamGstCapt <rtsp uri> <username> <password> <application> <parameter>");
     g_print ("\n\nExample that will capture videoclips of 5 minutes each:");
@@ -540,9 +551,7 @@ static void print_help(void) {
 }
 
 /* Handle initial arguments (0 success, -1 error) */
-static int handle_arguments(int argc, char *argv[], CustomData *data) {
-    int retval = 0;
-
+static int handle_arguments (int argc, char *argv[], CustomData *data) {
     if (argc > 5){
         g_print ("\nURI [%s]", argv[1]);
         g_print ("\nuser-name [%s]", argv[2]);
@@ -559,12 +568,154 @@ static int handle_arguments(int argc, char *argv[], CustomData *data) {
         } else {
             g_printerr ("\napplication [%s] is not yet supported.\n", argv[4]);
             print_help();
-            retval = -1;
+            return -1;
         }
     } else {
         print_help();
-        retval = -1;
+        return -1;
     }
+
+    return 0;
+}
+
+static int create_video_pipeline (int argc, char *argv[], CustomData *data) {
+    int retval = 0;
+    GstCaps *caps;
+
+    g_print ("\nCreating video pipeline.");
+
+    /* Create the elements */
+    data->source = gst_element_factory_make ("rtspsrc", "source");
+    data->depay = gst_element_factory_make ("rtph264depay", "depay");
+    data->decoder = gst_element_factory_make ("avdec_h264", "decoder");
+    data->convert = gst_element_factory_make ("videoconvert", "convert");
+    data->scale = gst_element_factory_make ("videoscale", "scale");
+    data->encoder = gst_element_factory_make ("x264enc", "encoder");
+    data->parser = gst_element_factory_make ("h264parse", "parser");
+    data->muxer = gst_element_factory_make ("mp4mux", "muxer"); // matroskamux or avimux or mp4mux
+    data->splitsink = gst_element_factory_make ("splitmuxsink", "splitsink");
+
+    /* Attach a blockpad to this element to be able to stop the pipeline dataflow decently */
+    data->blockpad = gst_element_get_static_pad (data->depay, "src");
+
+    /* Create the empty pipeline */
+    data->pipeline = gst_pipeline_new ("video-pipeline");
+
+    if (!data->pipeline || !data->source || !data->depay || !data->decoder || !data->convert || 
+        !data->scale || !data->encoder || !data->parser || !data->muxer || !data->splitsink) {
+        g_printerr ("\nNot all elements could be created.\n");
+        return -1;
+    }
+
+    /* Build the pipeline. */
+    gst_bin_add_many (GST_BIN (data->pipeline), data->source, data->depay, data->decoder, data->convert, 
+                        data->scale, data->encoder, data->parser, data->splitsink, NULL);
+
+    /* Note that we are NOT linking the source at this point. We will do it later. */
+    if (!gst_element_link_many (data->depay, data->decoder, data->convert, data->scale, NULL)) {
+        g_printerr ("\nElements for first part of video path could not be linked.\n");
+        return -1;
+    }
+
+    /* Negotiate caps */
+    //caps = gst_caps_from_string("video/x-raw, format=(string)RGB, width=320, height=240, framerate=(fraction)30/1");
+    // https://en.wikipedia.org/wiki/Display_resolution
+    // https://en.wikipedia.org/wiki/Display_resolution#/media/File:Vector_Video_Standards8.svg
+    //caps = gst_caps_from_string("video/x-raw, width=1280, height=720"); // Change scale from HD 1080 to HD 720
+    caps = gst_caps_from_string ("video/x-raw, width=1024, height=576"); // Change scale from HD 1080 to PAL
+    if (!gst_element_link_filtered (data->scale, data->encoder, caps)) {
+        g_printerr ("\nElement scale could not be linked to element encoder.\n");
+        return -1;
+    }
+    gst_caps_unref (caps);
+
+    /* Link the rest of the pipeline */
+    if (!gst_element_link_many (data->encoder, data->parser, data->splitsink, NULL)) {
+        g_printerr ("\nElements for last part of video path could not be linked.\n");
+        return -1;
+    }
+
+    /* Set the URI to play */
+    //g_object_set (data.source, "uri", "https://www.freedesktop.org/software/gstreamer-sdk/data/media/sintel_trailer-480p.webm", NULL);
+    g_object_set (data->source, "location", argv[1], NULL);
+    g_object_set (data->source, "user-id", argv[2], NULL);
+    g_object_set (data->source, "user-pw", argv[3], NULL);
+
+    g_object_set (data->encoder, "tune", 4, NULL); /* important, the encoder usually takes 1-3 seconds to process this. Queue buffer is generally upto 1 second. Hence, set tune=zerolatency (0x4) */
+
+    g_object_set (data->splitsink, "location", capture_file, NULL);
+    g_object_set (data->splitsink, "max-size-bytes", (data->appl_param * 30 * 1048576), NULL); // in bytes. 0 = disable, default is 0. Maximum 30 MB per minute.
+    g_object_set (data->splitsink, "max-size-time", (data->appl_param * 60 * GST_SECOND), NULL); // in nanoseconds. 0 = disable, default is 0
+    g_object_set (data->splitsink, "max-files", 30, NULL); // default is 0
+    g_object_set (data->splitsink, "muxer", data->muxer, NULL);
+
+    return (retval);
+}
+
+static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
+    int retval = 0;
+    GstCaps *caps;
+
+    g_print ("\nCreating photo pipeline.");
+
+    /* Create the elements */
+    data->source = gst_element_factory_make ("rtspsrc", "source");
+    data->depay = gst_element_factory_make ("rtph264depay", "depay");
+    data->decoder = gst_element_factory_make ("avdec_h264", "decoder");
+    data->convert = gst_element_factory_make ("videoconvert", "convert");
+    data->scale = gst_element_factory_make ("videoscale", "scale");
+    data->encoder = gst_element_factory_make ("jpegenc", "encoder");
+    data->filesink = gst_element_factory_make ("filesink", "filesink");
+
+    /* Attach a blockpad to this element to be able to stop the pipeline dataflow decently */
+    data->blockpad = gst_element_get_static_pad (data->depay, "src");
+
+    /* Create the empty pipeline */
+    data->pipeline = gst_pipeline_new ("photo-pipeline");
+
+    if (!data->pipeline || !data->source || !data->depay || !data->decoder || !data->convert || 
+        !data->scale || !data->encoder || !data->filesink) {
+        g_printerr ("\nNot all elements could be created.\n");
+        return -1;
+    }
+
+    /* Build the pipeline. */
+    gst_bin_add_many (GST_BIN (data->pipeline), data->source, data->depay, data->decoder, data->convert, 
+                        data->scale, data->encoder, data->filesink, NULL);
+
+    /* Note that we are NOT linking the source at this point. We will do it later. */
+    if (!gst_element_link_many (data->depay, data->decoder, data->convert, data->scale, NULL)) {
+        g_printerr ("\nElements for first part of photo path could not be linked.\n");
+        return -1;
+    }
+
+    /* Negotiate caps */
+    //caps = gst_caps_from_string("video/x-raw, format=(string)RGB, width=320, height=240, framerate=(fraction)30/1");
+    // https://en.wikipedia.org/wiki/Display_resolution
+    // https://en.wikipedia.org/wiki/Display_resolution#/media/File:Vector_Video_Standards8.svg
+    //caps = gst_caps_from_string("video/x-raw, width=1280, height=720"); // Change scale from HD 1080 to HD 720
+    caps = gst_caps_from_string ("video/x-raw, width=1024, height=576"); // Change scale from HD 1080 to PAL
+    if (!gst_element_link_filtered (data->scale, data->encoder, caps)) {
+        g_printerr ("\nElement scale could not be linked to element encoder.\n");
+        return -1;
+    }
+    gst_caps_unref (caps);
+
+    /* Link the rest of the pipeline */
+    if (!gst_element_link_many (data->encoder, data->filesink, NULL)) {
+        g_printerr ("\nElements for last part of photo path could not be linked.\n");
+        return -1;
+    }
+
+    /* Set the URI to play */
+    //g_object_set (data.source, "uri", "https://www.freedesktop.org/software/gstreamer-sdk/data/media/sintel_trailer-480p.webm", NULL);
+    g_object_set (data->source, "location", argv[1], NULL);
+    g_object_set (data->source, "user-id", argv[2], NULL);
+    g_object_set (data->source, "user-pw", argv[3], NULL);
+
+    g_object_set (data->encoder, "tune", 4, NULL); /* important, the encoder usually takes 1-3 seconds to process this. Queue buffer is generally upto 1 second. Hence, set tune=zerolatency (0x4) */
+
+    g_object_set (data->filesink, "location", capture_file, NULL);
 
     return (retval);
 }
@@ -572,7 +723,6 @@ static int handle_arguments(int argc, char *argv[], CustomData *data) {
 int main (int argc, char *argv[]) {
     CustomData data;
     GstBus *bus;
-    GstCaps *caps;
     GstStateChangeReturn ret;
     GIOChannel *io_channel;
     struct sigaction sa;
@@ -582,14 +732,14 @@ int main (int argc, char *argv[]) {
     gst_init (&argc, &argv);
 
     /* Initialize data structures and arrays */
-    initialize(&data);
+    initialize (&data);
 
-    if (handle_arguments(argc, argv, &data) != 0) {
+    if (handle_arguments (argc, argv, &data) != 0) {
         g_print ("\n");
         return -1;
     }
 
-    if (prepare_work_environment() != 0) {
+    if (prepare_work_environment (&data) != 0) {
         g_print ("\n");
         return -1;
     }
@@ -612,74 +762,24 @@ int main (int argc, char *argv[]) {
     while (!user_interrupt) {
         runs++;
 
-        /* Create the elements */
-        data.source = gst_element_factory_make ("rtspsrc", "source");
-        data.depay = gst_element_factory_make ("rtph264depay", "depay");
-        data.decoder = gst_element_factory_make ("avdec_h264", "decoder");
-        data.convert = gst_element_factory_make ("videoconvert", "convert");
-        data.scale = gst_element_factory_make ("videoscale", "scale");
-        data.encoder = gst_element_factory_make ("x264enc", "encoder");
-        data.parser = gst_element_factory_make ("h264parse", "parser");
-        data.muxer = gst_element_factory_make ("mp4mux", "muxer"); // matroskamux or avimux or mp4mux
-        data.sink = gst_element_factory_make ("autovideosink", "sink");
-        data.splitsink = gst_element_factory_make ("splitmuxsink", "splitsink");
-
-        /* Attach a blockpad to this element to be able to stop the pipeline dataflow decently */
-        data.blockpad = gst_element_get_static_pad (data.depay, "src");
-
-        /* Create the empty pipeline */
-        data.pipeline = gst_pipeline_new ("my-pipeline");
-
-        if (!data.pipeline || !data.source || !data.depay || !data.decoder || !data.convert || 
-            !data.scale || !data.encoder || !data.parser || !data.muxer || !data.sink || !data.splitsink) {
-            g_printerr ("\nNot all elements could be created.\n");
-            return -1;
+        switch (data.appl) {
+            case VIDEO:
+                if (create_video_pipeline (argc, argv, &data) != 0) {
+                    gst_object_unref (data.pipeline);
+                    return -1;
+                }
+                break;
+            case PHOTO:
+                if (create_photo_pipeline (argc, argv, &data) != 0) {
+                    gst_object_unref (data.pipeline);
+                    return -1;
+                }
+                break;
+            default:
+                g_printerr ("\nThis application is not yet supported.\n");
+                return -1;
+                break;
         }
-
-        /* Build the pipeline. */
-        gst_bin_add_many (GST_BIN (data.pipeline), data.source, data.depay, data.decoder, data.convert, 
-                            data.scale, data.encoder, data.parser, data.splitsink, NULL);
-
-        /* Note that we are NOT linking the source at this point. We will do it later. */
-        if (!gst_element_link_many (data.depay, data.decoder, data.convert, data.scale, NULL)) {
-            g_printerr ("\nElements for first part of video path could not be linked.\n");
-            gst_object_unref (data.pipeline);
-            return -1;
-        }
-
-        /* Negotiate caps */
-        //caps = gst_caps_from_string("video/x-raw, format=(string)RGB, width=320, height=240, framerate=(fraction)30/1");
-        // https://en.wikipedia.org/wiki/Display_resolution
-        // https://en.wikipedia.org/wiki/Display_resolution#/media/File:Vector_Video_Standards8.svg
-        //caps = gst_caps_from_string("video/x-raw, width=1280, height=720"); // Change scale from HD 1080 to HD 720
-        caps = gst_caps_from_string ("video/x-raw, width=1024, height=576"); // Change scale from HD 1080 to PAL
-        if (!gst_element_link_filtered (data.scale, data.encoder, caps)) {
-            g_printerr ("\nElement scale could not be linked to element encoder.\n");
-            gst_object_unref (data.pipeline);
-            return -1;
-        }
-        gst_caps_unref (caps);
-
-        /* Link the rest of the pipeline */
-        if (!gst_element_link_many (data.encoder, data.parser, data.splitsink, NULL)) {
-            g_printerr ("\nElements for last part of video path could not be linked.\n");
-            gst_object_unref (data.pipeline);
-            return -1;
-        }
-
-        /* Set the URI to play */
-        //g_object_set (data.source, "uri", "https://www.freedesktop.org/software/gstreamer-sdk/data/media/sintel_trailer-480p.webm", NULL);
-        g_object_set (data.source, "location", argv[1], NULL);
-        g_object_set (data.source, "user-id", argv[2], NULL);
-        g_object_set (data.source, "user-pw", argv[3], NULL);
-
-        g_object_set (data.encoder, "tune", 4, NULL); /* important, the encoder usually takes 1-3 seconds to process this. Queue buffer is generally upto 1 second. Hence, set tune=zerolatency (0x4) */
-
-        g_object_set (data.splitsink, "location", capture_file, NULL);
-        g_object_set (data.splitsink, "max-size-bytes", (data.appl_param * 30 * 1048576), NULL); // in bytes. 0 = disable, default is 0. Maximum 30 MB per minute.
-        g_object_set (data.splitsink, "max-size-time", (data.appl_param * 60 * GST_SECOND), NULL); // in nanoseconds. 0 = disable, default is 0
-        g_object_set (data.splitsink, "max-files", 30, NULL); // default is 0
-        g_object_set (data.splitsink, "muxer", data.muxer, NULL);
 
         /* Connect to the pad-added signal */
         g_signal_connect (data.source, "pad-added", G_CALLBACK (handle_pad_added), &data);
@@ -721,9 +821,6 @@ int main (int argc, char *argv[]) {
         gst_element_set_state (data.pipeline, GST_STATE_NULL);
         gst_object_unref (data.pipeline);
     }
-
-    /* Free resources */
-    free (working_dir);
 
     g_print ("\n\nHave a nice day.\n");
     return 0;
