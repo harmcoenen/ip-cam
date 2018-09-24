@@ -1,4 +1,5 @@
 #include <gst/gst.h>
+#include <gst/video/video.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -394,6 +395,16 @@ static gboolean upload_timer (CustomData *data) {
 }
 
 /* This function is called periodically */
+static gboolean snapshot_timer (CustomData *data) {
+    if (data->appl == PHOTO) {
+        if (save_snapshot (data) == 0) {
+            g_print ("\nSnapshot saved.");
+        }
+    }
+    return TRUE; /* Otherwise the callback will be cancelled */
+}
+
+/* This function is called periodically */
 static gboolean mainloop_timer (CustomData *data) {
     if (user_interrupt) {
         /* Add a pad probe to the src pad and block the downstream */
@@ -508,11 +519,11 @@ static int prepare_work_environment (CustomData *data) {
             g_printerr ("\nDirectory [%s] is NOT available", uploads_dir);
             retval = -1;
         }
-        strcpy (capture_file, capture_dir); strcat (capture_file, "/"); strcat (capture_file, rec_filename);
+        strcpy (capture_file, capture_dir); strcat (capture_file, "/");
         if (data->appl == VIDEO) {
-             strcat (capture_file, extension_video);
+            strcat (capture_file, recording_filename); strcat (capture_file, extension_video);
         } else if (data->appl == PHOTO) {
-            strcat (capture_file, extension_photo);
+            strcat (capture_file, snapshot_filename); strcat (capture_file, extension_photo);
         }
         g_print ("\nCapture file is [%s]", capture_file);
 
@@ -662,10 +673,11 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     data->source = gst_element_factory_make ("rtspsrc", "source");
     data->depay = gst_element_factory_make ("rtph264depay", "depay");
     data->decoder = gst_element_factory_make ("avdec_h264", "decoder");
+    data->tee = gst_element_factory_make ("tee", "tee");
+    data->queue = gst_element_factory_make ("queue", "queue");
     data->convert = gst_element_factory_make ("videoconvert", "convert");
     data->scale = gst_element_factory_make ("videoscale", "scale");
-    data->encoder = gst_element_factory_make ("jpegenc", "encoder");
-    data->filesink = gst_element_factory_make ("filesink", "filesink");
+    data->videosink = gst_element_factory_make ("fakesink", "videosink"); //autovideosink
 
     /* Attach a blockpad to this element to be able to stop the pipeline dataflow decently */
     data->blockpad = gst_element_get_static_pad (data->depay, "src");
@@ -674,14 +686,14 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     data->pipeline = gst_pipeline_new ("photo-pipeline");
 
     if (!data->pipeline || !data->source || !data->depay || !data->decoder || !data->convert || 
-        !data->scale || !data->encoder || !data->filesink) {
+        !data->scale || !data->videosink) {
         g_printerr ("\nNot all elements could be created.\n");
         return -1;
     }
 
     /* Build the pipeline. */
     gst_bin_add_many (GST_BIN (data->pipeline), data->source, data->depay, data->decoder, data->convert, 
-                        data->scale, data->encoder, data->filesink, NULL);
+                        data->scale, data->videosink, NULL);
 
     /* Note that we are NOT linking the source at this point. We will do it later. */
     if (!gst_element_link_many (data->depay, data->decoder, data->convert, data->scale, NULL)) {
@@ -695,17 +707,11 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     // https://en.wikipedia.org/wiki/Display_resolution#/media/File:Vector_Video_Standards8.svg
     //caps = gst_caps_from_string("video/x-raw, width=1280, height=720"); // Change scale from HD 1080 to HD 720
     caps = gst_caps_from_string ("video/x-raw, width=1024, height=576"); // Change scale from HD 1080 to PAL
-    if (!gst_element_link_filtered (data->scale, data->encoder, caps)) {
+    if (!gst_element_link_filtered (data->scale, data->videosink, caps)) {
         g_printerr ("\nElement scale could not be linked to element encoder.\n");
         return -1;
     }
     gst_caps_unref (caps);
-
-    /* Link the rest of the pipeline */
-    if (!gst_element_link_many (data->encoder, data->filesink, NULL)) {
-        g_printerr ("\nElements for last part of photo path could not be linked.\n");
-        return -1;
-    }
 
     /* Set the URI to play */
     //g_object_set (data.source, "uri", "https://www.freedesktop.org/software/gstreamer-sdk/data/media/sintel_trailer-480p.webm", NULL);
@@ -713,11 +719,46 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     g_object_set (data->source, "user-id", argv[2], NULL);
     g_object_set (data->source, "user-pw", argv[3], NULL);
 
-    g_object_set (data->encoder, "tune", 4, NULL); /* important, the encoder usually takes 1-3 seconds to process this. Queue buffer is generally upto 1 second. Hence, set tune=zerolatency (0x4) */
-
-    g_object_set (data->filesink, "location", capture_file, NULL);
-
     return (retval);
+}
+
+static int save_snapshot (CustomData *data) {
+    GError *err = NULL;
+    GstCaps *caps;
+    GstBuffer *buf;
+    GstSample *last_sample, *converted_sample;
+    GstMapInfo map_info;
+
+    g_object_get (data->videosink, "last-sample", &last_sample, NULL);
+    if (last_sample == NULL) {
+        g_printerr ("\nError getting last sample from sink");
+        return -1;
+    }
+
+    caps = gst_caps_from_string ("image/png");
+    converted_sample = gst_video_convert_sample (last_sample, caps, GST_CLOCK_TIME_NONE, &err);
+    gst_caps_unref (caps);
+    gst_sample_unref (last_sample);
+
+    if (converted_sample == NULL && err) {
+        g_printerr ("\nError converting sample: %s", err->message);
+        g_error_free (err);
+        return -1;
+    }
+
+    buf = gst_sample_get_buffer (converted_sample);
+    if (gst_buffer_map (buf, &map_info, GST_MAP_READ)) {
+        if (!g_file_set_contents (capture_file, (const char *) map_info.data, map_info.size, &err)) {
+            g_printerr ("\nCould not save thumbnail: %s", err->message);
+            g_error_free (err);
+            return -1;
+        }
+    }
+
+    gst_buffer_unmap (buf, &map_info);
+    gst_sample_unref (converted_sample);
+
+    return 0;
 }
 
 int main (int argc, char *argv[]) {
@@ -757,6 +798,7 @@ int main (int argc, char *argv[]) {
 
     /* Register a function that GLib will call every x seconds */
     mainloop_timer_id = g_timeout_add_seconds (1, (GSourceFunc)mainloop_timer, &data);
+    snapshot_timer_id = g_timeout_add_seconds (30, (GSourceFunc)snapshot_timer, &data);
     upload_timer_id = g_timeout_add_seconds (60, (GSourceFunc)upload_timer, &data);
 
     while (!user_interrupt) {
