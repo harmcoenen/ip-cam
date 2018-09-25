@@ -399,6 +399,8 @@ static gboolean snapshot_timer (CustomData *data) {
     if (data->appl == PHOTO) {
         if (save_snapshot (data) == 0) {
             g_print ("\nSnapshot saved.");
+            strcpy (closedfilename, capture_file);
+            move_to_upload_directory(data);
         }
     }
     return TRUE; /* Otherwise the callback will be cancelled */
@@ -735,7 +737,7 @@ static int save_snapshot (CustomData *data) {
         return -1;
     }
 
-    caps = gst_caps_from_string ("image/png");
+    caps = gst_caps_from_string ("image/jpeg");
     converted_sample = gst_video_convert_sample (last_sample, caps, GST_CLOCK_TIME_NONE, &err);
     gst_caps_unref (caps);
     gst_sample_unref (last_sample);
@@ -798,7 +800,7 @@ int main (int argc, char *argv[]) {
 
     /* Register a function that GLib will call every x seconds */
     mainloop_timer_id = g_timeout_add_seconds (1, (GSourceFunc)mainloop_timer, &data);
-    snapshot_timer_id = g_timeout_add_seconds (30, (GSourceFunc)snapshot_timer, &data);
+    snapshot_timer_id = g_timeout_add_seconds (data.appl_param, (GSourceFunc)snapshot_timer, &data);
     upload_timer_id = g_timeout_add_seconds (60, (GSourceFunc)upload_timer, &data);
 
     while (!user_interrupt) {

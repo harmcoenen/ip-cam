@@ -8,7 +8,7 @@ const char *appl_photo = "photo";
 const char *recording_filename="rec%03d";
 const char *snapshot_filename="snapshot";
 const char *extension_video = ".mp4";
-const char *extension_photo = ".png";
+const char *extension_photo = ".jpeg";
 char src_video_padname[50];
 char capture_dir[PATH_MAX];
 char capture_file[PATH_MAX];
