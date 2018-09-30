@@ -37,7 +37,9 @@ typedef struct _CustomData {
     GstElement *decoder;
     GstElement *tee;
     GstElement *queue;
-    GstElement *convert;
+    GstElement *convert_a;
+    GstElement *motioncells;
+    GstElement *convert_b;
     GstElement *scale;
     GstElement *encoder;
     GstElement *parser;
@@ -45,6 +47,8 @@ typedef struct _CustomData {
     GstElement *videosink;
     GstElement *splitsink;
     GstPad *blockpad;
+    gboolean motion;
+    gboolean motion_detected;
 } CustomData;
 
 static void handle_pad_added (GstElement *src, GstPad *new_pad, CustomData *data);

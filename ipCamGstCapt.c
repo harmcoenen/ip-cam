@@ -74,12 +74,20 @@ static gboolean handle_keyboard (GIOChannel *channel, GIOCondition cond, CustomD
                 user_interrupt = TRUE;
                 gst_element_set_state (data->pipeline, GST_STATE_READY);
                 g_main_loop_quit (data->loop);
+            } else if (strcmp ("motion\n", retString) == 0){
+                //g_print("\nMotion %s, motion detected is [%s]", data->motion ? "started" : "stopped", data->motion_detected ? "TRUE" : "FALSE");
+                g_print("\nMotion [%d], motion detected is [%d]", data->motion, data->motion_detected);
+            } else if (strcmp ("motion start\n", retString) == 0){
+                data->motion = TRUE;
+                data->motion_detected = TRUE;
+            } else if (strcmp ("motion stop\n", retString) == 0){
+                data->motion = FALSE;
             } else {
                 int index = g_ascii_strtoull (retString, NULL, 0);
                 if (index < 0 || index >= 8) {
-                  g_printerr ("Index out of bounds\n");
+                  g_printerr ("\nIndex out of bounds.");
                 } else {
-                  g_print ("You presses %d\n", index);
+                  g_print ("\nYou presses %d\n", index);
                 }
             }
             break;
@@ -259,19 +267,34 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
             g_print ("\nStream Start message [%s][%s] received.", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg));
             break;
 
-        case GST_MESSAGE_ELEMENT:
-            //g_print ("\nElement message [%s][%s][%s] received.", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg), gst_structure_get_name (gst_message_get_structure (msg)));
-            if (strcmp ("splitmuxsink-fragment-opened", gst_structure_get_name (gst_message_get_structure (msg))) == 0){
-                strcpy (openedfilename, gst_structure_get_string (gst_message_get_structure (msg), "location"));
+        case GST_MESSAGE_ELEMENT: {
+            const GstStructure *msg_struct = gst_message_get_structure (msg);
+            if (gst_structure_has_name (msg_struct, "splitmuxsink-fragment-opened")) {
+                strcpy (openedfilename, gst_structure_get_string (msg_struct, "location"));
                 g_print ("\nCapture filename just opened is: [%s]", openedfilename);
-            }
-            if (strcmp ("splitmuxsink-fragment-closed", gst_structure_get_name (gst_message_get_structure (msg))) == 0){
-                strcpy (closedfilename, gst_structure_get_string (gst_message_get_structure (msg), "location"));
+            } else if (gst_structure_has_name (msg_struct, "splitmuxsink-fragment-closed")) {
+                strcpy (closedfilename, gst_structure_get_string (msg_struct, "location"));
                 g_print ("\nCapture filename just closed is: [%s]", closedfilename);
-                /* move it to the ftp upload directory to keep it safe */
-                move_to_upload_directory(data);
+                if (data->motion_detected == TRUE) {
+                    /* Move it to the ftp upload directory to keep it safe */
+                    move_to_upload_directory(data);
+                    /* When there is currently no motion reset the detected flag */
+                    if (data->motion == FALSE) data->motion_detected = FALSE;
+                }
+            } else if (gst_structure_has_name (msg_struct, "motion")) {
+                if (gst_structure_has_field (msg_struct, "motion_begin")) {
+                    data->motion = TRUE;
+                    data->motion_detected = TRUE;
+                    g_print ("\nMotion detected in area(s): %s", gst_structure_get_string (msg_struct, "motion_cells_indices"));
+                } else if (gst_structure_has_field (msg_struct, "motion_finished")) {
+                    data->motion = FALSE;
+                    g_print ("\nMotion end");
+                }
+            } else {
+                g_print ("\nElement message [%s][%s][%s] received (unhandled).", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg), gst_structure_get_name (msg_struct));
             }
             break;
+        }
 
         case GST_MESSAGE_STATE_CHANGED:
             /* We are only interested in state-changed messages from the pipeline */
@@ -284,7 +307,7 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
                     print_pad_capabilities (data->source, src_video_padname);
                 }
                 /* Print the current capabilities of a sink pad */
-                print_pad_capabilities (data->depay, "sink");
+                //print_pad_capabilities (data->depay, "sink");
             }
             break;
 
@@ -601,7 +624,9 @@ static int create_video_pipeline (int argc, char *argv[], CustomData *data) {
     data->source = gst_element_factory_make ("rtspsrc", "source");
     data->depay = gst_element_factory_make ("rtph264depay", "depay");
     data->decoder = gst_element_factory_make ("avdec_h264", "decoder");
-    data->convert = gst_element_factory_make ("videoconvert", "convert");
+    data->convert_a = gst_element_factory_make ("videoconvert", "convert_a");
+    data->motioncells = gst_element_factory_make ("motioncells", "motioncells");
+    data->convert_b = gst_element_factory_make ("videoconvert", "convert_b");
     data->scale = gst_element_factory_make ("videoscale", "scale");
     data->encoder = gst_element_factory_make ("x264enc", "encoder");
     data->parser = gst_element_factory_make ("h264parse", "parser");
@@ -614,18 +639,18 @@ static int create_video_pipeline (int argc, char *argv[], CustomData *data) {
     /* Create the empty pipeline */
     data->pipeline = gst_pipeline_new ("video-pipeline");
 
-    if (!data->pipeline || !data->source || !data->depay || !data->decoder || !data->convert || 
-        !data->scale || !data->encoder || !data->parser || !data->muxer || !data->splitsink) {
+    if (!data->pipeline || !data->source || !data->depay || !data->decoder || !data->convert_a || !data->motioncells ||
+        !data->convert_b || !data->scale || !data->encoder || !data->parser || !data->muxer || !data->splitsink) {
         g_printerr ("\nNot all elements could be created.\n");
         return -1;
     }
 
     /* Build the pipeline. */
-    gst_bin_add_many (GST_BIN (data->pipeline), data->source, data->depay, data->decoder, data->convert, 
-                        data->scale, data->encoder, data->parser, data->splitsink, NULL);
+    gst_bin_add_many (GST_BIN (data->pipeline), data->source, data->depay, data->decoder, data->convert_a, data->motioncells,
+                        data->convert_b, data->scale, data->encoder, data->parser, data->splitsink, NULL);
 
     /* Note that we are NOT linking the source at this point. We will do it later. */
-    if (!gst_element_link_many (data->depay, data->decoder, data->convert, data->scale, NULL)) {
+    if (!gst_element_link_many (data->depay, data->decoder, data->convert_a, data->motioncells, data->convert_b, data->scale, NULL)) {
         g_printerr ("\nElements for first part of video path could not be linked.\n");
         return -1;
     }
@@ -654,6 +679,14 @@ static int create_video_pipeline (int argc, char *argv[], CustomData *data) {
     g_object_set (data->source, "user-id", argv[2], NULL);
     g_object_set (data->source, "user-pw", argv[3], NULL);
 
+    g_object_set (data->motioncells, "display", 1, NULL);
+    g_object_set (data->motioncells, "cellscolor", "255,0,255", NULL);
+    g_object_set (data->motioncells, "gridx", 12, NULL);
+    g_object_set (data->motioncells, "gridy", 12, NULL);
+    g_object_set (data->motioncells, "sensitivity", 0.1, NULL);
+    g_object_set (data->motioncells, "threshold", 0.1, NULL);
+    g_object_set (data->motioncells, "minimummotionframes", 1, NULL);
+
     g_object_set (data->encoder, "tune", 4, NULL); /* important, the encoder usually takes 1-3 seconds to process this. Queue buffer is generally upto 1 second. Hence, set tune=zerolatency (0x4) */
 
     g_object_set (data->splitsink, "location", capture_file, NULL);
@@ -677,7 +710,9 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     data->decoder = gst_element_factory_make ("avdec_h264", "decoder");
     data->tee = gst_element_factory_make ("tee", "tee");
     data->queue = gst_element_factory_make ("queue", "queue");
-    data->convert = gst_element_factory_make ("videoconvert", "convert");
+    data->convert_a = gst_element_factory_make ("videoconvert", "convert_a");
+    data->motioncells = gst_element_factory_make ("motioncells", "motioncells");
+    data->convert_b = gst_element_factory_make ("videoconvert", "convert_b");
     data->scale = gst_element_factory_make ("videoscale", "scale");
     data->videosink = gst_element_factory_make ("fakesink", "videosink"); //autovideosink
 
@@ -687,18 +722,18 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     /* Create the empty pipeline */
     data->pipeline = gst_pipeline_new ("photo-pipeline");
 
-    if (!data->pipeline || !data->source || !data->depay || !data->decoder || !data->convert || 
-        !data->scale || !data->videosink) {
+    if (!data->pipeline || !data->source || !data->depay || !data->decoder || !data->convert_a || !data->motioncells || 
+        !data->convert_b || !data->scale || !data->videosink) {
         g_printerr ("\nNot all elements could be created.\n");
         return -1;
     }
 
     /* Build the pipeline. */
-    gst_bin_add_many (GST_BIN (data->pipeline), data->source, data->depay, data->decoder, data->convert, 
-                        data->scale, data->videosink, NULL);
+    gst_bin_add_many (GST_BIN (data->pipeline), data->source, data->depay, data->decoder, data->convert_a, data->motioncells, 
+                        data->convert_b, data->scale, data->videosink, NULL);
 
     /* Note that we are NOT linking the source at this point. We will do it later. */
-    if (!gst_element_link_many (data->depay, data->decoder, data->convert, data->scale, NULL)) {
+    if (!gst_element_link_many (data->depay, data->decoder, data->convert_a, data->motioncells, data->convert_b, data->scale, NULL)) {
         g_printerr ("\nElements for first part of photo path could not be linked.\n");
         return -1;
     }
@@ -720,6 +755,14 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     g_object_set (data->source, "location", argv[1], NULL);
     g_object_set (data->source, "user-id", argv[2], NULL);
     g_object_set (data->source, "user-pw", argv[3], NULL);
+
+    g_object_set (data->motioncells, "display", 1, NULL);
+    g_object_set (data->motioncells, "cellscolor", "255,0,255", NULL);
+    g_object_set (data->motioncells, "gridx", 12, NULL);
+    g_object_set (data->motioncells, "gridy", 12, NULL);
+    g_object_set (data->motioncells, "sensitivity", 0.1, NULL);
+    g_object_set (data->motioncells, "threshold", 0.1, NULL);
+    g_object_set (data->motioncells, "minimummotionframes", 1, NULL);
 
     return (retval);
 }
