@@ -10,21 +10,14 @@
 #else
 #include <unistd.h>
 #endif
+#include <dirent.h>
 #include "ipCamFTP.h"
 
 /* ftp.familiecoenen.nl port 21, /public/www/recordings */
 const char *remote_url = "ftp://ftp.familiecoenen.nl/";
 
-/* NOTE: if you want this example to work on Windows with libcurl as a
-   DLL, you MUST also provide a read callback with CURLOPT_READFUNCTION.
-   Failing to do so will give you a crash since a DLL may not use the
-   variable's memory when passed in to it from an app like this. */ 
 static size_t read_callback (void *ptr, size_t size, size_t nmemb, void *stream) {
-    curl_off_t nread;
-
     size_t retcode = fread (ptr, size, nmemb, stream);
-    nread = (curl_off_t)retcode;
-//    fprintf (stderr, "\nRead %" CURL_FORMAT_CURL_OFF_T " bytes from file.", nread);
     return retcode;
 }
  
@@ -35,16 +28,13 @@ int ftp_upload_file (const char *pathfilename, const char *filename, const char 
     struct stat file_info;
     curl_off_t fsize;
 
-    struct curl_slist *headerlist = NULL;
-    static const char buf_1 [] = "RNFR uploadfile.txt";
-    static const char buf_2 [] = "RNTO renamedfile.txt";
     static char remote_url_and_file[60];
 
     strcpy (remote_url_and_file, remote_url); strcat (remote_url_and_file, filename);
 
     /* get the file size of the local file */ 
     if (stat (pathfilename, &file_info)) {
-        printf ("\nCouldn't open '%s': %s", pathfilename, strerror(errno));
+        printf ("\nCouldn't open '%s': %s", pathfilename, strerror (errno));
         return 1;
     }
     fsize = (curl_off_t)file_info.st_size;
@@ -52,18 +42,14 @@ int ftp_upload_file (const char *pathfilename, const char *filename, const char 
     printf ("\nLocal file size: %" CURL_FORMAT_CURL_OFF_T " bytes.", fsize);
 
     /* get a FILE * of the same file */ 
-    hd_src = fopen(pathfilename, "rb");
-    
+    hd_src = fopen (pathfilename, "rb");
+
     /* In windows, this will init the winsock stuff */ 
     curl_global_init (CURL_GLOBAL_ALL);
 
     /* get a curl handle */ 
     curl = curl_easy_init ();
     if (curl) {
-        /* build a list of commands to pass to libcurl */ 
-        headerlist = curl_slist_append (headerlist, buf_1);
-        headerlist = curl_slist_append (headerlist, buf_2);
-
         /* we want to use our own read function */ 
         curl_easy_setopt (curl, CURLOPT_READFUNCTION, read_callback);
 
@@ -74,14 +60,8 @@ int ftp_upload_file (const char *pathfilename, const char *filename, const char 
         curl_easy_setopt (curl, CURLOPT_URL, remote_url_and_file);
         curl_easy_setopt (curl, CURLOPT_USERPWD, usrpwd);
 
-        /* pass in that last of FTP commands to run after the transfer */ 
-        //curl_easy_setopt (curl, CURLOPT_POSTQUOTE, headerlist);
-
         /* now specify which file to upload */ 
         curl_easy_setopt (curl, CURLOPT_READDATA, hd_src);
-
-        /* We activate SSL and we require it for both control and data */
-        // curl_easy_setopt (curl, CURLOPT_USE_SSL, CURLUSESSL_ALL);
 
         /* Set the size of the file to upload (optional).  If you give a *_LARGE
            option you MUST make sure that the type of the passed-in argument is a
@@ -91,17 +71,23 @@ int ftp_upload_file (const char *pathfilename, const char *filename, const char 
 
         /* Enable verbose logging */
         curl_easy_setopt (curl, CURLOPT_VERBOSE, 0L);
-      
+
         /* Enable progress meter */
-        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
-        
+        curl_easy_setopt (curl, CURLOPT_NOPROGRESS, 1L);
+
         /* Now run off and do what you've been told! */ 
         res = curl_easy_perform (curl);
         /* Check for errors */ 
-        if (res != CURLE_OK) fprintf (stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror (res));
-
-        /* clean up the FTP commands list */ 
-        curl_slist_free_all (headerlist);
+        if (res == CURLE_OK) {
+            /* remove file if upload successfull */
+            if (remove (pathfilename) == 0) {
+                printf ("\nFile [%s] deleted successfully", pathfilename);
+            } else {
+                printf ("\nError: unable to delete file [%s]", pathfilename);
+            }
+        } else {
+            fprintf (stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror (res));
+        }
 
         /* always cleanup */ 
         curl_easy_cleanup (curl);
@@ -110,4 +96,82 @@ int ftp_upload_file (const char *pathfilename, const char *filename, const char 
     fclose (hd_src); /* close the local file */ 
     curl_global_cleanup ();
     return (res);
+}
+
+int ftp_upload_files (const char *path_with_uploads, const char *usrpwd) {
+    CURL *curl;
+    CURLcode res;
+    FILE *hd_src;
+    struct stat file_info;
+    curl_off_t fsize;
+    DIR *dr = NULL;
+    struct dirent *de;
+
+    static char remote_url_and_file[60];
+    static char local_path_and_file[PATH_MAX];
+
+    dr = opendir (path_with_uploads); 
+    if (dr == NULL) {
+        printf ("\nCould not open directory of files to upload.");
+        return -1;
+    }
+
+    /* In windows, this will init the winsock stuff */ 
+    curl_global_init (CURL_GLOBAL_ALL);
+
+    /* get a curl handle */ 
+    curl = curl_easy_init ();
+    if (curl) {
+        curl_easy_setopt (curl, CURLOPT_READFUNCTION, read_callback);
+        curl_easy_setopt (curl, CURLOPT_UPLOAD, 1L);
+        curl_easy_setopt (curl, CURLOPT_USERPWD, usrpwd);
+        curl_easy_setopt (curl, CURLOPT_VERBOSE, 0L);
+        curl_easy_setopt (curl, CURLOPT_NOPROGRESS, 1L);
+
+        while ((de = readdir (dr)) != NULL) {
+            if ((strcmp (".", de->d_name) != 0) && (strcmp ("..", de->d_name) != 0)) {
+                strcpy (remote_url_and_file, remote_url); strcat (remote_url_and_file, de->d_name);
+                strcpy (local_path_and_file, path_with_uploads); strcat (local_path_and_file, "/"); strcat (local_path_and_file, de->d_name);
+                printf ("\nGoing to upload [%s] to [%s]", local_path_and_file, remote_url_and_file);
+                /* specify target */ 
+                curl_easy_setopt (curl, CURLOPT_URL, remote_url_and_file);
+                /* get the file size of the local file */ 
+                if (stat (local_path_and_file, &file_info)) {
+                    printf ("\nCouldn't open '%s': %s", local_path_and_file, strerror (errno));
+                    curl_easy_cleanup (curl); curl_global_cleanup (); closedir (dr); /* always cleanup */
+                    return -1;
+                }
+                fsize = (curl_off_t)file_info.st_size;
+                printf ("\nLocal file size: %" CURL_FORMAT_CURL_OFF_T " bytes.", fsize);
+                /* get a FILE * of the same file */ 
+                hd_src = fopen (local_path_and_file, "rb");
+                /* now specify which file to upload */ 
+                curl_easy_setopt (curl, CURLOPT_READDATA, hd_src);
+                curl_easy_setopt (curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t)fsize);
+
+                /* Now run off and do what you've been told! */ 
+                res = curl_easy_perform (curl);
+                /* Check for errors */ 
+                if (res == CURLE_OK) {
+                    printf ("\nFile [%s] uploaded successfully", local_path_and_file);
+                    /* remove file if upload successfull */
+                    if (remove (local_path_and_file) == 0) {
+                        printf ("\nFile [%s] deleted successfully", local_path_and_file);
+                    } else {
+                        printf ("\nError: unable to delete file [%s]", local_path_and_file);
+                    }
+                } else {
+                    fprintf (stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror (res));
+                }
+                fclose (hd_src); /* close the local file */ 
+            }
+        }
+
+        /* always cleanup */ 
+        curl_easy_cleanup (curl);
+    }
+
+    curl_global_cleanup ();
+    closedir (dr);
+    return 0;
 }

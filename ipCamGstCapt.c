@@ -359,12 +359,12 @@ int get_list_of_files_to_upload (CustomData *data) {
     int n_files = 0;
     gboolean file_found = FALSE;
 
-    DIR *dr = opendir(uploads_dir); 
+    DIR *dr = opendir (uploads_dir); 
     if (dr == NULL) {
         g_print ("\nCould not open current directory");
         return 0;
     }
-    while ((de = readdir(dr)) != NULL) {
+    while ((de = readdir (dr)) != NULL) {
         if ((strcmp (".", de->d_name) != 0) && (strcmp ("..", de->d_name) != 0)) {
             if (file_found == FALSE){
                 strcpy (upload_file, de->d_name);
@@ -395,24 +395,27 @@ static void what_time_is_it (char *newtime) {
 
 /* This function is called periodically */
 static gboolean upload_timer (CustomData *data) {
-    char time_string[20];
     char upload_file_fullname[PATH_MAX];
+    time_t start_time, end_time;
 
-    what_time_is_it (time_string); g_print ("\nUpload_timer expired at time: [%s]", time_string);
-    if (get_list_of_files_to_upload (data) > 0) {
-        what_time_is_it (time_string); g_print ("\nFTP start time [%s]", time_string);
-        strcpy (upload_file_fullname, uploads_dir); strcat (upload_file_fullname, "/"); strcat (upload_file_fullname, upload_file);
-        if (ftp_upload_file (upload_file_fullname, upload_file, username_passwd) == 0) {
-            g_print ("\nFile [%s] uploaded successfully", upload_file);
-            /* remove file if upload successfull */
-            if (remove (upload_file_fullname) == 0) {
-                g_print ("\nFile [%s] deleted successfully", upload_file_fullname);
-            } else {
-                g_print ("\nError: unable to delete file [%s]", upload_file_fullname);
+    time (&start_time);
+    g_print ("\nUpload_timer expired at %s", asctime (localtime (&start_time)));
+
+    if (data->appl == VIDEO) {
+        if (get_list_of_files_to_upload (data) > 0) {
+            strcpy (upload_file_fullname, uploads_dir); strcat (upload_file_fullname, "/"); strcat (upload_file_fullname, upload_file);
+            if (ftp_upload_file (upload_file_fullname, upload_file, username_passwd) == 0) {
+                g_print ("\nFile [%s] uploaded successfully", upload_file);
             }
         }
-        what_time_is_it (time_string); g_print ("\nFTP stop time [%s]", time_string);
+    } else if (data->appl == PHOTO) {
+        if (ftp_upload_files (uploads_dir, username_passwd) == 0) {
+            g_print ("\nUpload of files finished without problems");
+        }
     }
+
+    time (&end_time);
+    g_print ("\nFTP upload execution time = %f", difftime (end_time, start_time));
 
     return TRUE; /* Otherwise the callback will be cancelled */
 }
@@ -722,18 +725,19 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     /* Create the empty pipeline */
     data->pipeline = gst_pipeline_new ("photo-pipeline");
 
-    if (!data->pipeline || !data->source || !data->depay || !data->decoder || !data->convert_a || !data->motioncells || 
-        !data->convert_b || !data->scale || !data->videosink) {
+    if (!data->pipeline || !data->source || !data->depay || !data->decoder || !data->convert_a || 
+        !data->motioncells || !data->convert_b || !data->scale || !data->videosink) {
         g_printerr ("\nNot all elements could be created.\n");
         return -1;
     }
 
     /* Build the pipeline. */
-    gst_bin_add_many (GST_BIN (data->pipeline), data->source, data->depay, data->decoder, data->convert_a, data->motioncells, 
-                        data->convert_b, data->scale, data->videosink, NULL);
+    gst_bin_add_many (GST_BIN (data->pipeline), data->source, data->depay, data->decoder, data->convert_a, 
+                      data->motioncells, data->convert_b, data->scale, data->videosink, NULL);
 
     /* Note that we are NOT linking the source at this point. We will do it later. */
-    if (!gst_element_link_many (data->depay, data->decoder, data->convert_a, data->motioncells, data->convert_b, data->scale, NULL)) {
+    if (!gst_element_link_many (data->depay, data->decoder, data->convert_a, 
+                                data->motioncells, data->convert_b, data->scale, NULL)) {
         g_printerr ("\nElements for first part of photo path could not be linked.\n");
         return -1;
     }
