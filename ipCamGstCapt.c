@@ -11,6 +11,7 @@
 #include <linux/limits.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <pthread.h>
 #include "ipCamGstCapt.h"
 #include "ipCamPrinting.h"
 #include "ipCamFTP.h"
@@ -578,42 +579,39 @@ static void initialize (CustomData *data) {
     memset (username_passwd, '\0', sizeof (username_passwd));
 }
 
-static void print_help (void) {
-    g_print ("\n\033[4;031mIncorrect parameters detected.\033[0m Please supply URI, user name, password, application and parameter.");
-    g_print ("\nFormat:");
-    g_print ("\n./ipCamGstCapt <rtsp uri> <username> <password> <application> <parameter>");
-    g_print ("\n\nExample that will capture videoclips of 5 minutes each:");
-    g_print ("\n./ipCamGstCapt rtsp://192.168.178.28:88/videoMain username 'password' video 5");
-    g_print ("\n\nExample that will capture a photo each 3 seconds:");
-    g_print ("\n./ipCamGstCapt rtsp://192.168.178.28:88/videoMain username 'password' photo 3");
-    g_print ("\n\n");
-}
-
 /* Handle initial arguments (0 success, -1 error) */
-static int handle_arguments (int argc, char *argv[], CustomData *data) {
-    if (argc > 5){
-        g_print ("\nURI [%s]", argv[1]);
-        g_print ("\nuser-name [%s]", argv[2]);
-        g_print ("\npassword [%s]", argv[3]);
-        strcpy (username_passwd, argv[2]); strcat (username_passwd, ":"); strcat (username_passwd, argv[3]);
-        g_print ("\ncombi is [%s]", username_passwd);
-        data->appl_param = atoi (argv[5]);
-        if (strcmp (argv[4], appl_video) == 0) {
-            data->appl = VIDEO;
-            g_print ("\napplication is video with parameter [%d]", data->appl_param);
-        } else if (strcmp (argv[4], appl_photo) == 0) {
-            data->appl = PHOTO;
-            g_print ("\napplication is photo with parameter [%d]", data->appl_param);
-        } else {
-            g_printerr ("\napplication [%s] is not yet supported.\n", argv[4]);
-            print_help();
-            return -1;
-        }
+static int handle_arguments (CustomData *data) {
+    g_print ("\n---------------------------------------");
+    if (rtsp_user) {
+        strcpy (username_passwd, rtsp_user);
     } else {
-        print_help();
+        strcpy (username_passwd, "user");
+    }
+    strcat (username_passwd, ":");
+    if (rtsp_pass) {
+        strcat (username_passwd, rtsp_pass);
+    } else {
+        strcat (username_passwd, "pwd");
+    }
+    data->appl_param = timing;
+    if (strcmp (application, appl_video) == 0) {
+        data->appl = VIDEO;
+        g_print ("\napplication is video with parameter [%d]", data->appl_param);
+    } else if (strcmp (application, appl_photo) == 0) {
+        data->appl = PHOTO;
+        g_print ("\napplication is photo with parameter [%d]", data->appl_param);
+    } else {
+        g_printerr ("\napplication [%s] is not yet supported.\n", application);
         return -1;
     }
 
+    g_print ("\ncamera-uri [%s]", camera_uri);
+    g_print ("\nrtsp-user [%s]", rtsp_user);
+    g_print ("\nrtsp-pass [%s]", rtsp_pass);
+    g_print ("\ncombi is [%s]", username_passwd);
+    g_print ("\napplication [%s]", application);
+    g_print ("\ntiming [%d]", timing);
+    g_print ("\n---------------------------------------");
     return 0;
 }
 
@@ -678,9 +676,9 @@ static int create_video_pipeline (int argc, char *argv[], CustomData *data) {
 
     /* Set the URI to play */
     //g_object_set (data.source, "uri", "https://www.freedesktop.org/software/gstreamer-sdk/data/media/sintel_trailer-480p.webm", NULL);
-    g_object_set (data->source, "location", argv[1], NULL);
-    g_object_set (data->source, "user-id", argv[2], NULL);
-    g_object_set (data->source, "user-pw", argv[3], NULL);
+    g_object_set (data->source, "location", camera_uri, NULL);
+    g_object_set (data->source, "user-id", rtsp_user, NULL);
+    g_object_set (data->source, "user-pw", rtsp_pass, NULL);
 
     g_object_set (data->motioncells, "display", 1, NULL);
     g_object_set (data->motioncells, "cellscolor", "255,0,255", NULL);
@@ -756,9 +754,9 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
 
     /* Set the URI to play */
     //g_object_set (data.source, "uri", "https://www.freedesktop.org/software/gstreamer-sdk/data/media/sintel_trailer-480p.webm", NULL);
-    g_object_set (data->source, "location", argv[1], NULL);
-    g_object_set (data->source, "user-id", argv[2], NULL);
-    g_object_set (data->source, "user-pw", argv[3], NULL);
+    g_object_set (data->source, "location", camera_uri, NULL);
+    g_object_set (data->source, "user-id", rtsp_user, NULL);
+    g_object_set (data->source, "user-pw", rtsp_pass, NULL);
 
     g_object_set (data->motioncells, "display", 1, NULL);
     g_object_set (data->motioncells, "cellscolor", "255,0,255", NULL);
@@ -817,6 +815,8 @@ int main (int argc, char *argv[]) {
     GIOChannel *io_channel;
     struct sigaction sa;
     static unsigned int runs = 0;
+    GOptionContext *context;
+    GError *error = NULL;
 
     /* Initialize GStreamer */
     gst_init (&argc, &argv);
@@ -824,7 +824,15 @@ int main (int argc, char *argv[]) {
     /* Initialize data structures and arrays */
     initialize (&data);
 
-    if (handle_arguments (argc, argv, &data) != 0) {
+    context = g_option_context_new ("--> Outdoor IP camera capture system.");
+    g_option_context_add_main_entries (context, options, NULL);
+    g_option_context_add_group (context, gst_init_get_option_group ());
+    if (!g_option_context_parse (context, &argc, &argv, &error)) {
+      g_print ("\nParsing the options has failed: %s\n", error->message);
+      return -1;
+    }
+
+    if (handle_arguments (&data) != 0) {
         g_print ("\n");
         return -1;
     }

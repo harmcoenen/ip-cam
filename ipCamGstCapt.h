@@ -1,14 +1,14 @@
 #ifndef IPCAMGSTCAPT_H
 #define IPCAMGSTCAPT_H
 
-const char *capture_subdir = "/cap";
-const char *uploads_subdir = "/upl";
-const char *appl_video = "video";
-const char *appl_photo = "photo";
-const char *recording_filename="rec%03d";
-const char *snapshot_filename="snapshot";
-const char *extension_video = ".mp4";
-const char *extension_photo = ".jpeg";
+static const char *capture_subdir = "/cap";
+static const char *uploads_subdir = "/upl";
+static const char *appl_video = "video";
+static const char *appl_photo = "photo";
+static const char *recording_filename="rec%03d";
+static const char *snapshot_filename="snapshot";
+static const char *extension_video = ".mp4";
+static const char *extension_photo = ".jpeg";
 char src_video_padname[50];
 char capture_dir[PATH_MAX];
 char capture_file[PATH_MAX];
@@ -22,6 +22,22 @@ static gboolean user_interrupt = FALSE;
 guint mainloop_timer_id;
 guint snapshot_timer_id;
 guint upload_timer_id;
+
+/* Argument options for this application */
+static const gchar *camera_uri = NULL;
+static const gchar *rtsp_user = NULL;
+static const gchar *rtsp_pass = NULL;
+static const gchar *application = "video";
+static gint timing = 5;
+static GOptionEntry options [] =
+{
+    { "camera-uri", 'l', 0, G_OPTION_ARG_STRING, &camera_uri, "Camera URI in the form of rtsp://<ip>:<port>/videoMain", NULL },
+    { "rtsp-user", 'u', 0, G_OPTION_ARG_STRING, &rtsp_user, "Username for camera access", NULL },
+    { "rtsp-pass", 'p', 0, G_OPTION_ARG_STRING, &rtsp_pass, "Password for camera access", NULL },
+    { "application", 'a', 0, G_OPTION_ARG_STRING, &application, "Application mode; video or photo (default: video)", NULL },
+    { "timing", 't', 0, G_OPTION_ARG_INT, &timing, "Minutes of video recording or interval seconds between each snapshot (default: 5)", NULL },
+    { NULL }
+};
 
 enum Application {VIDEO = 1, PHOTO = 2};
 
@@ -66,7 +82,7 @@ static int prepare_dir (const char *dir_to_create);
 static int prepare_work_environment (CustomData *data);
 static void initialize (CustomData *data);
 static void print_help (void);
-static int handle_arguments (int argc, char *argv[], CustomData *data);
+static int handle_arguments (CustomData *data);
 static int create_video_pipeline (int argc, char *argv[], CustomData *data);
 static int create_photo_pipeline (int argc, char *argv[], CustomData *data);
 static int save_snapshot (CustomData *data);
