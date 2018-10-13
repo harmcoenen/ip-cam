@@ -29,6 +29,7 @@ static const gchar *rtsp_user = NULL;
 static const gchar *rtsp_pass = NULL;
 static const gchar *application = "video";
 static gint timing = 5;
+static gboolean motion_detection = FALSE;
 static GOptionEntry options [] =
 {
     { "camera-uri", 'l', 0, G_OPTION_ARG_STRING, &camera_uri, "Camera URI in the form of rtsp://<ip>:<port>/videoMain", NULL },
@@ -36,6 +37,7 @@ static GOptionEntry options [] =
     { "rtsp-pass", 'p', 0, G_OPTION_ARG_STRING, &rtsp_pass, "Password for camera access", NULL },
     { "application", 'a', 0, G_OPTION_ARG_STRING, &application, "Application mode; video or photo (default: video)", NULL },
     { "timing", 't', 0, G_OPTION_ARG_INT, &timing, "Minutes of video recording or interval seconds between each snapshot (default: 5)", NULL },
+    { "motion-detection", 'm', 0, G_OPTION_ARG_NONE, &motion_detection, "Enable motion detection (default: disabled)", NULL},
     { NULL }
 };
 
@@ -53,7 +55,7 @@ typedef struct _CustomData {
     GstElement *decoder;
     GstElement *tee;
     GstElement *queue;
-    GstElement *convert_a;
+    GstElement *convert;
     GstElement *motioncells;
     GstElement *convert_b;
     GstElement *scale;
