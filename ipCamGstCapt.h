@@ -18,6 +18,8 @@ char upload_file[PATH_MAX];
 char openedfilename[PATH_MAX];
 char closedfilename[PATH_MAX];
 char username_passwd[25];
+static gboolean motion = FALSE;
+static gboolean motion_detected = FALSE;
 static gboolean user_interrupt = FALSE;
 guint mainloop_timer_id;
 guint snapshot_timer_id;
@@ -65,8 +67,6 @@ typedef struct _CustomData {
     GstElement *videosink;
     GstElement *splitsink;
     GstPad *blockpad;
-    gboolean motion;
-    gboolean motion_detected;
 } CustomData;
 
 static void handle_pad_added (GstElement *src, GstPad *new_pad, CustomData *data);

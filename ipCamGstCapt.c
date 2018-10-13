@@ -78,16 +78,15 @@ static gboolean handle_keyboard (GIOChannel *channel, GIOCondition cond, CustomD
                 g_main_loop_quit (data->loop);
             } else if (strcmp ("motion\n", retString) == 0){
                 if (motion_detection) {
-                    g_print ("\nMotion %s, motion%sdetected", (data->motion) ? "started" : "stopped", (data->motion_detected) ? " " : " not ");
-                    //g_print ("\nMotion [%d], motion detected is [%d]", data->motion, data->motion_detected);
+                    g_print ("\nMotion %s, motion%sdetected", (motion) ? "started" : "stopped", (motion_detected) ? " " : " not ");
                 } else {
                     g_print ("\nMotion detection is disabled.");
                 }
             } else if (strcmp ("motion start\n", retString) == 0){
-                data->motion = TRUE;
-                data->motion_detected = TRUE;
+                motion = TRUE;
+                motion_detected = TRUE;
             } else if (strcmp ("motion stop\n", retString) == 0){
-                data->motion = FALSE;
+                motion = FALSE;
             } else {
                 int index = g_ascii_strtoull (retString, NULL, 0);
                 if (index < 0 || index >= 8) {
@@ -282,11 +281,11 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
                 strcpy (closedfilename, gst_structure_get_string (msg_struct, "location"));
                 g_print ("\nCapture filename just closed is: [%s]", closedfilename);
                 if (motion_detection) {
-                    if (data->motion_detected) {
+                    if (motion_detected) {
                         /* Move it to the ftp upload directory to keep it safe */
                         move_to_upload_directory(data);
                         /* When there is currently no motion reset the detected flag */
-                        if (!data->motion) data->motion_detected = FALSE;
+                        if (!motion) motion_detected = FALSE;
                     }
                 } else {
                     /* Move it to the ftp upload directory to keep it safe */
@@ -294,11 +293,11 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
                 }
             } else if (gst_structure_has_name (msg_struct, "motion")) {
                 if (gst_structure_has_field (msg_struct, "motion_begin")) {
-                    data->motion = TRUE;
-                    data->motion_detected = TRUE;
+                    motion = TRUE;
+                    motion_detected = TRUE;
                     g_print ("\nMotion detected in area(s): %s", gst_structure_get_string (msg_struct, "motion_cells_indices"));
                 } else if (gst_structure_has_field (msg_struct, "motion_finished")) {
-                    data->motion = FALSE;
+                    motion = FALSE;
                     g_print ("\nMotion end");
                 }
             } else {
@@ -636,8 +635,10 @@ static int create_video_pipeline (int argc, char *argv[], CustomData *data) {
     data->depay = gst_element_factory_make ("rtph264depay", "depay");
     data->decoder = gst_element_factory_make ("avdec_h264", "decoder");
     data->convert = gst_element_factory_make ("videoconvert", "convert");
-    data->motioncells = gst_element_factory_make ("motioncells", "motioncells");
-    data->convert_b = gst_element_factory_make ("videoconvert", "convert_b");
+    if (motion_detection) {
+        data->motioncells = gst_element_factory_make ("motioncells", "motioncells");
+        data->convert_b = gst_element_factory_make ("videoconvert", "convert_b");
+    }
     data->scale = gst_element_factory_make ("videoscale", "scale");
     data->encoder = gst_element_factory_make ("x264enc", "encoder");
     data->parser = gst_element_factory_make ("h264parse", "parser");
@@ -651,23 +652,39 @@ static int create_video_pipeline (int argc, char *argv[], CustomData *data) {
     data->pipeline = gst_pipeline_new ("video-pipeline");
 
     if (!data->pipeline || !data->source || !data->depay || !data->decoder || !data->convert || 
-        !data->motioncells || !data->convert_b || 
         !data->scale || !data->encoder || !data->parser || !data->muxer || !data->splitsink) {
         g_printerr ("\nNot all elements could be created.\n");
         return -1;
     }
+    if (motion_detection) {
+        if (!data->motioncells || !data->convert_b) {
+            g_printerr ("\nNot all elements (motion) could be created.\n");
+            return -1;
+        }
+    }
 
     /* Build the pipeline. */
     gst_bin_add_many (GST_BIN (data->pipeline), data->source, data->depay, data->decoder, data->convert,
-                        data->motioncells, data->convert_b, 
-                        data->scale, data->encoder, data->parser, data->splitsink, NULL);
+                      data->scale, data->encoder, data->parser, data->splitsink, NULL);
+    if (motion_detection) {
+        gst_bin_add_many (GST_BIN (data->pipeline), data->motioncells, data->convert_b, NULL);
+    }
 
     /* Note that we are NOT linking the source at this point. We will do it later. */
-    if (!gst_element_link_many (data->depay, data->decoder, data->convert,
-                                data->motioncells, data->convert_b, 
-                                data->scale, NULL)) {
+    if (!gst_element_link_many (data->depay, data->decoder, data->convert, NULL)) {
         g_printerr ("\nElements for first part of video path could not be linked.\n");
         return -1;
+    }
+    if (motion_detection) {
+        if (!gst_element_link_many (data->convert, data->motioncells, data->convert_b, data->scale, NULL)) {
+            g_printerr ("\nElements for second part (with motion) of video path could not be linked.\n");
+            return -1;
+        }
+    } else {
+        if (!gst_element_link_many (data->convert, data->scale, NULL)) {
+            g_printerr ("\nElements for second part (without motion) of video path could not be linked.\n");
+            return -1;
+        }
     }
 
     /* Negotiate caps */
@@ -689,20 +706,23 @@ static int create_video_pipeline (int argc, char *argv[], CustomData *data) {
     }
 
     /* Set the URI to play */
-    //g_object_set (data.source, "uri", "https://www.freedesktop.org/software/gstreamer-sdk/data/media/sintel_trailer-480p.webm", NULL);
     g_object_set (data->source, "location", camera_uri, NULL);
     g_object_set (data->source, "user-id", rtsp_user, NULL);
     g_object_set (data->source, "user-pw", rtsp_pass, NULL);
 
-    g_object_set (data->motioncells, "display", 1, NULL);
-    g_object_set (data->motioncells, "cellscolor", "255,0,255", NULL);
-    g_object_set (data->motioncells, "gridx", 12, NULL);
-    g_object_set (data->motioncells, "gridy", 12, NULL);
-    g_object_set (data->motioncells, "sensitivity", 0.1, NULL);
-    g_object_set (data->motioncells, "threshold", 0.1, NULL);
-    g_object_set (data->motioncells, "minimummotionframes", 1, NULL);
+    if (motion_detection) {
+        g_object_set (data->motioncells, "display", 1, NULL);
+        g_object_set (data->motioncells, "cellscolor", "255,0,255", NULL);
+        g_object_set (data->motioncells, "gridx", 12, NULL);
+        g_object_set (data->motioncells, "gridy", 12, NULL);
+        g_object_set (data->motioncells, "sensitivity", 0.1, NULL);
+        g_object_set (data->motioncells, "threshold", 0.1, NULL);
+        g_object_set (data->motioncells, "minimummotionframes", 1, NULL);
+    }
 
-    g_object_set (data->encoder, "tune", 4, NULL); /* important, the encoder usually takes 1-3 seconds to process this. Queue buffer is generally upto 1 second. Hence, set tune=zerolatency (0x4) */
+    /* Important, the encoder usually takes 1-3 seconds to process this. */
+    /* Queue buffer is generally upto 1 second. Hence, set tune=zerolatency (0x4) */
+    g_object_set (data->encoder, "tune", 4, NULL);
 
     g_object_set (data->splitsink, "location", capture_file, NULL);
     g_object_set (data->splitsink, "max-size-bytes", (data->appl_param * 30 * 1048576), NULL); // in bytes. 0 = disable, default is 0. Maximum 30 MB per minute.
@@ -726,8 +746,10 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     data->tee = gst_element_factory_make ("tee", "tee");
     data->queue = gst_element_factory_make ("queue", "queue");
     data->convert = gst_element_factory_make ("videoconvert", "convert");
-    data->motioncells = gst_element_factory_make ("motioncells", "motioncells");
-    data->convert_b = gst_element_factory_make ("videoconvert", "convert_b");
+    if (motion_detection) {
+        data->motioncells = gst_element_factory_make ("motioncells", "motioncells");
+        data->convert_b = gst_element_factory_make ("videoconvert", "convert_b");
+    }
     data->scale = gst_element_factory_make ("videoscale", "scale");
     data->videosink = gst_element_factory_make ("fakesink", "videosink"); //autovideosink
 
@@ -737,26 +759,42 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     /* Create the empty pipeline */
     data->pipeline = gst_pipeline_new ("photo-pipeline");
 
-    if (!data->pipeline || !data->source || !data->depay || !data->decoder || !data->convert || 
-        !data->motioncells || !data->convert_b || 
-        !data->scale || !data->videosink) {
+    if (!data->pipeline || !data->source || !data->depay || !data->decoder || !data->tee || 
+        !data->queue || !data->convert || !data->scale || !data->videosink) {
         g_printerr ("\nNot all elements could be created.\n");
         return -1;
+    }
+    if (motion_detection) {
+        if (!data->motioncells || !data->convert_b) {
+            g_printerr ("\nNot all elements (motion) could be created.\n");
+            return -1;
+        }
     }
 
     /* Build the pipeline. */
     gst_bin_add_many (GST_BIN (data->pipeline), data->source, data->depay, data->decoder, data->convert, 
-                      data->motioncells, data->convert_b, 
                       data->scale, data->videosink, NULL);
+    if (motion_detection) {
+        gst_bin_add_many (GST_BIN (data->pipeline), data->motioncells, data->convert_b, NULL);
+    }
 
     /* Note that we are NOT linking the source at this point. We will do it later. */
-    if (!gst_element_link_many (data->depay, data->decoder, data->convert, 
-                                data->motioncells, data->convert_b, 
-                                data->scale, NULL)) {
+    if (!gst_element_link_many (data->depay, data->decoder, data->convert, NULL)) {
         g_printerr ("\nElements for first part of photo path could not be linked.\n");
         return -1;
     }
-
+    if (motion_detection) {
+        if (!gst_element_link_many (data->convert, data->motioncells, data->convert_b, data->scale, NULL)) {
+            g_printerr ("\nElements for second part (with motion) of photo path could not be linked.\n");
+            return -1;
+        }
+    } else {
+        if (!gst_element_link_many (data->convert, data->scale, NULL)) {
+            g_printerr ("\nElements for second part (without motion) of photo path could not be linked.\n");
+            return -1;
+        }
+    }
+    
     /* Negotiate caps */
     //caps = gst_caps_from_string("video/x-raw, format=(string)RGB, width=320, height=240, framerate=(fraction)30/1");
     // https://en.wikipedia.org/wiki/Display_resolution
@@ -775,13 +813,15 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     g_object_set (data->source, "user-id", rtsp_user, NULL);
     g_object_set (data->source, "user-pw", rtsp_pass, NULL);
 
-    g_object_set (data->motioncells, "display", 1, NULL);
-    g_object_set (data->motioncells, "cellscolor", "255,0,255", NULL);
-    g_object_set (data->motioncells, "gridx", 12, NULL);
-    g_object_set (data->motioncells, "gridy", 12, NULL);
-    g_object_set (data->motioncells, "sensitivity", 0.1, NULL);
-    g_object_set (data->motioncells, "threshold", 0.1, NULL);
-    g_object_set (data->motioncells, "minimummotionframes", 1, NULL);
+    if (motion_detection) {
+        g_object_set (data->motioncells, "display", 1, NULL);
+        g_object_set (data->motioncells, "cellscolor", "255,0,255", NULL);
+        g_object_set (data->motioncells, "gridx", 12, NULL);
+        g_object_set (data->motioncells, "gridy", 12, NULL);
+        g_object_set (data->motioncells, "sensitivity", 0.1, NULL);
+        g_object_set (data->motioncells, "threshold", 0.1, NULL);
+        g_object_set (data->motioncells, "minimummotionframes", 1, NULL);
+    }
 
     return (retval);
 }
@@ -840,8 +880,6 @@ int main (int argc, char *argv[]) {
 
     /* Initialize data structures and arrays */
     initialize (&data);
-    data.motion = FALSE;
-    data.motion_detected = FALSE;
 
     context = g_option_context_new ("--> Outdoor IP camera capture system.");
     g_option_context_add_main_entries (context, options, NULL);
