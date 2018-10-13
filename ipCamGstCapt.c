@@ -283,13 +283,13 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
                 if (motion_detection) {
                     if (motion_detected) {
                         /* Move it to the ftp upload directory to keep it safe */
-                        move_to_upload_directory(data);
+                        move_to_upload_directory (data);
                         /* When there is currently no motion reset the detected flag */
                         if (!motion) motion_detected = FALSE;
                     }
                 } else {
                     /* Move it to the ftp upload directory to keep it safe */
-                    move_to_upload_directory(data);
+                    move_to_upload_directory (data);
                 }
             } else if (gst_structure_has_name (msg_struct, "motion")) {
                 if (gst_structure_has_field (msg_struct, "motion_begin")) {
@@ -435,7 +435,7 @@ static gboolean snapshot_timer (CustomData *data) {
         if (save_snapshot (data) == 0) {
             g_print ("\nSnapshot saved.");
             strcpy (closedfilename, capture_file);
-            move_to_upload_directory(data);
+            move_to_upload_directory (data);
         }
     }
     return TRUE; /* Otherwise the callback will be cancelled */
@@ -808,7 +808,6 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     gst_caps_unref (caps);
 
     /* Set the URI to play */
-    //g_object_set (data.source, "uri", "https://www.freedesktop.org/software/gstreamer-sdk/data/media/sintel_trailer-480p.webm", NULL);
     g_object_set (data->source, "location", camera_uri, NULL);
     g_object_set (data->source, "user-id", rtsp_user, NULL);
     g_object_set (data->source, "user-pw", rtsp_pass, NULL);
@@ -835,7 +834,7 @@ static int save_snapshot (CustomData *data) {
 
     g_object_get (data->videosink, "last-sample", &last_sample, NULL);
     if (last_sample == NULL) {
-        g_printerr ("\nError getting last sample from sink");
+        g_printerr ("\nError getting last sample from videosink");
         return -1;
     }
 
