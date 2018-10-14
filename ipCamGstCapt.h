@@ -24,6 +24,8 @@ static gboolean user_interrupt = FALSE;
 guint mainloop_timer_id;
 guint snapshot_timer_id;
 guint upload_timer_id;
+pthread_t ftp_thread_id;
+pthread_mutex_t ftp_mutex;
 
 /* Argument options for this application */
 static const gchar *camera_uri = NULL;
@@ -44,10 +46,10 @@ static GOptionEntry options [] =
 };
 
 enum Application {VIDEO = 1, PHOTO = 2};
+enum Application appl;
 
 /* Structure to contain all our information, so we can pass it to callbacks */
 typedef struct _CustomData {
-    enum Application appl;
     guint appl_param;
     GMainLoop *loop;
     gboolean is_live;
@@ -73,7 +75,9 @@ static void handle_pad_added (GstElement *src, GstPad *new_pad, CustomData *data
 static gboolean handle_keyboard (GIOChannel *channel, GIOCondition cond, CustomData *data);
 static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data);
 static GstPadProbeReturn pad_probe_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data);
+int get_list_of_files_to_upload (void);
 static void what_time_is_it (char *newtime);
+static void *ftp_upload (void *arg);
 static gboolean upload_timer (CustomData *data);
 static gboolean snapshot_timer (CustomData *data);
 static gboolean mainloop_timer (CustomData *data);

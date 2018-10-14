@@ -362,8 +362,7 @@ static GstPadProbeReturn pad_probe_cb (GstPad * pad, GstPadProbeInfo * info, gpo
     return GST_PAD_PROBE_REMOVE;
 }
 
-
-int get_list_of_files_to_upload (CustomData *data) {
+int get_list_of_files_to_upload (void) {
     struct dirent *de;
     int n_files = 0;
     gboolean file_found = FALSE;
@@ -403,35 +402,58 @@ static void what_time_is_it (char *newtime) {
 }
 
 /* This function is called periodically */
-static gboolean upload_timer (CustomData *data) {
+static void *ftp_upload (void *arg) {
     char upload_file_fullname[PATH_MAX];
     time_t start_time, end_time;
 
+    pthread_mutex_lock (&ftp_mutex);
     time (&start_time);
-    g_print ("\nUpload_timer expired at %s", asctime (localtime (&start_time)));
+    g_print ("\nThread (ptid %08x) ftp_upload started %s", (int)pthread_self (), asctime (localtime (&start_time)));
 
-    if (data->appl == VIDEO) {
-        if (get_list_of_files_to_upload (data) > 0) {
+    if (appl == VIDEO) {
+        g_print ("\nFTP upload video");
+        if (get_list_of_files_to_upload () > 0) {
             strcpy (upload_file_fullname, uploads_dir); strcat (upload_file_fullname, "/"); strcat (upload_file_fullname, upload_file);
             if (ftp_upload_file (upload_file_fullname, upload_file, username_passwd) == 0) {
                 g_print ("\nFile [%s] uploaded successfully", upload_file);
             }
         }
-    } else if (data->appl == PHOTO) {
+    } else if (appl == PHOTO) {
+        g_print ("\nFTP upload photo");
         if (ftp_upload_files (uploads_dir, username_passwd) == 0) {
             g_print ("\nUpload of files finished without problems");
         }
     }
 
     time (&end_time);
-    g_print ("\nFTP upload execution time = %f", difftime (end_time, start_time));
+    g_print ("\nThread ftp_upload execution time = %f", difftime (end_time, start_time));
+    pthread_mutex_unlock (&ftp_mutex);
+}
+
+/* This function is called periodically */
+static gboolean upload_timer (CustomData *data) {
+    time_t start_time, end_time;
+    int err;
+
+    time (&start_time);
+    g_print ("\nUpload timer expired at %s", asctime (localtime (&start_time)));
+
+    err = pthread_create (&ftp_thread_id, NULL, &ftp_upload, NULL);
+    if (err != 0) {
+        g_print ("\nCan't create ftp upoad thread: [%s]", strerror (err));
+    } else {
+        g_print ("\nThread for ftp upoad created successfully");
+    }
+
+    time (&end_time);
+    g_print ("\nUpload timer execution time = %f", difftime (end_time, start_time));
 
     return TRUE; /* Otherwise the callback will be cancelled */
 }
 
 /* This function is called periodically */
 static gboolean snapshot_timer (CustomData *data) {
-    if (data->appl == PHOTO) {
+    if (appl == PHOTO) {
         if (save_snapshot (data) == 0) {
             g_print ("\nSnapshot saved.");
             strcpy (closedfilename, capture_file);
@@ -474,9 +496,9 @@ static gboolean move_to_upload_directory (CustomData *data) {
 
     /* Concatenate the upload file name */
     strcpy (preupl_file, uploads_dir); strcat (preupl_file, "/"); strcat (preupl_file, time_string);
-    if (data->appl == VIDEO) {
+    if (appl == VIDEO) {
         strcat (preupl_file, extension_video);
-    } else if (data->appl == PHOTO) {
+    } else if (appl == PHOTO) {
         strcat (preupl_file, extension_photo);
     }
     if (rename (closedfilename, preupl_file) == -1) {
@@ -557,9 +579,9 @@ static int prepare_work_environment (CustomData *data) {
             retval = -1;
         }
         strcpy (capture_file, capture_dir); strcat (capture_file, "/");
-        if (data->appl == VIDEO) {
+        if (appl == VIDEO) {
             strcat (capture_file, recording_filename); strcat (capture_file, extension_video);
-        } else if (data->appl == PHOTO) {
+        } else if (appl == PHOTO) {
             strcat (capture_file, snapshot_filename); strcat (capture_file, extension_photo);
         }
         g_print ("\nCapture file is [%s]", capture_file);
@@ -575,6 +597,7 @@ static int prepare_work_environment (CustomData *data) {
 
 /* Initialize data structures and arrays */
 static void initialize (CustomData *data) {
+    pthread_mutex_init (&ftp_mutex, NULL);
     memset (&data, 0, sizeof (data));
     memset (src_video_padname, '\0', sizeof (src_video_padname));
     memset (capture_dir, '\0', sizeof (capture_dir));
@@ -603,10 +626,10 @@ static int handle_arguments (CustomData *data) {
     }
     data->appl_param = timing;
     if (strcmp (application, appl_video) == 0) {
-        data->appl = VIDEO;
+        appl = VIDEO;
         g_print ("\napplication is video with parameter [%d]", data->appl_param);
     } else if (strcmp (application, appl_photo) == 0) {
-        data->appl = PHOTO;
+        appl = PHOTO;
         g_print ("\napplication is photo with parameter [%d]", data->appl_param);
     } else {
         g_printerr ("\napplication [%s] is not yet supported.\n", application);
@@ -917,7 +940,7 @@ int main (int argc, char *argv[]) {
     while (!user_interrupt) {
         runs++;
 
-        switch (data.appl) {
+        switch (appl) {
             case VIDEO:
                 if (create_video_pipeline (argc, argv, &data) != 0) {
                     gst_object_unref (data.pipeline);
@@ -977,6 +1000,7 @@ int main (int argc, char *argv[]) {
         gst_object_unref (data.pipeline);
     }
 
+    pthread_mutex_destroy (&ftp_mutex);
     g_print ("\n\nHave a nice day.\n");
     return 0;
 }
