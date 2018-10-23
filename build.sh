@@ -1,5 +1,10 @@
 #!/bin/bash
-cp '/mnt/hgfs/SharedFolder/github/ip-cam/.travis.yml' /home/harm/github/ip-cam/.
-cp /mnt/hgfs/SharedFolder/github/ip-cam/* /home/harm/github/ip-cam/.
+
+if [ -d /mnt/hgfs/SharedFolder/github/ip-cam ] ; then
+    cp '/mnt/hgfs/SharedFolder/github/ip-cam/.travis.yml' /home/harm/github/ip-cam/.
+    cp /mnt/hgfs/SharedFolder/github/ip-cam/* /home/harm/github/ip-cam/.
+else
+    echo "Can not copy source tree as the SharedFolder is not avaiable on this system."
+fi
 
 gcc ipCamGstCapt.c ipCamPrinting.c ipCamFTP.c -o ipCamGstCapt `pkg-config --cflags --libs gstreamer-video-1.0 gstreamer-1.0 libcurl`
