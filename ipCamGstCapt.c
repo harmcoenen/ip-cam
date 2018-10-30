@@ -39,7 +39,7 @@ static void handle_pad_added (GstElement *src, GstPad *new_pad, CustomData *data
             if (GST_PAD_LINK_SUCCESSFUL (ret)) {
                 g_print ("\nLink for video succeeded.");
                 strcpy (src_video_padname, GST_PAD_NAME (new_pad));
-                print_pad_capabilities (data->source, src_video_padname);
+                //print_pad_capabilities (data->source, src_video_padname);
             } else {
                 g_print ("\nLink for video failed.");
             }
@@ -315,7 +315,7 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
                 /* Print the current capabilities of the source pad */
                 if (new_state == GST_STATE_PLAYING) {
                     //print_pad_capabilities (data->source, src_video_padname);
-                    print_pad_capabilities (data->convert, "sink");
+                    //print_pad_capabilities (data->convert, "sink");
                 }
             }
             break;
@@ -419,9 +419,11 @@ static void *ftp_upload (void *arg) {
             }
         }
     } else if (appl == PHOTO) {
+        char remote_dir[20];
+        what_time_is_it (remote_dir);
         g_print ("\nFTP upload photo");
-        if (ftp_upload_files (uploads_dir, username_passwd) == 0) {
-            g_print ("\nUpload of files finished without problems");
+        if (ftp_upload_files (uploads_dir, remote_dir, username_passwd) == 0) {
+            //g_print ("\nUpload of files finished without problems");
         }
     }
 
@@ -455,7 +457,7 @@ static gboolean upload_timer (CustomData *data) {
 static gboolean snapshot_timer (CustomData *data) {
     if (appl == PHOTO) {
         if (save_snapshot (data) == 0) {
-            g_print ("\nSnapshot saved.");
+            //g_print ("\nSnapshot saved.");
             strcpy (closedfilename, capture_file);
             move_to_upload_directory (data);
         }
@@ -504,7 +506,7 @@ static gboolean move_to_upload_directory (CustomData *data) {
     if (rename (closedfilename, preupl_file) == -1) {
         g_printerr ("\nrename returned error [%s]", strerror (errno));
     } else {
-        g_print("\nSuccesfully moved file [%s] to [%s]", closedfilename, preupl_file);
+        //g_print("\nSuccesfully moved file [%s] to [%s]", closedfilename, preupl_file);
     }
     return TRUE;
 }
@@ -935,7 +937,7 @@ int main (int argc, char *argv[]) {
     /* Register a function that GLib will call every x seconds */
     mainloop_timer_id = g_timeout_add_seconds (1, (GSourceFunc)mainloop_timer, &data);
     snapshot_timer_id = g_timeout_add_seconds (data.appl_param, (GSourceFunc)snapshot_timer, &data);
-    upload_timer_id = g_timeout_add_seconds (60, (GSourceFunc)upload_timer, &data);
+    upload_timer_id = g_timeout_add_seconds (30 * 60, (GSourceFunc)upload_timer, &data);
 
     while (!user_interrupt) {
         runs++;

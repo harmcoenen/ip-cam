@@ -28,7 +28,7 @@ int ftp_upload_file (const char *pathfilename, const char *filename, const char 
     struct stat file_info;
     curl_off_t fsize;
 
-    static char remote_url_and_file[60];
+    static char remote_url_and_file[PATH_MAX];
 
     strcpy (remote_url_and_file, remote_url); strcat (remote_url_and_file, filename);
 
@@ -75,6 +75,10 @@ int ftp_upload_file (const char *pathfilename, const char *filename, const char 
         /* Enable progress meter */
         curl_easy_setopt (curl, CURLOPT_NOPROGRESS, 1L);
 
+        curl_easy_setopt (curl, CURLOPT_FTP_CREATE_MISSING_DIRS, CURLFTP_CREATE_DIR);
+        curl_easy_setopt (curl, CURLOPT_NEW_DIRECTORY_PERMS, 0755L); /* Default is 0755 */
+        curl_easy_setopt (curl, CURLOPT_NEW_FILE_PERMS, 0644L); /* Default is 0644 */
+
         /* Now run off and do what you've been told! */ 
         res = curl_easy_perform (curl);
         /* Check for errors */ 
@@ -98,7 +102,7 @@ int ftp_upload_file (const char *pathfilename, const char *filename, const char 
     return (res);
 }
 
-int ftp_upload_files (const char *path_with_uploads, const char *usrpwd) {
+int ftp_upload_files (const char *path_with_uploads, const char *remote_dir, const char *usrpwd) {
     CURL *curl;
     CURLcode res;
     FILE *hd_src;
@@ -107,7 +111,7 @@ int ftp_upload_files (const char *path_with_uploads, const char *usrpwd) {
     DIR *dr = NULL;
     struct dirent *de;
 
-    static char remote_url_and_file[60];
+    static char remote_url_and_file[PATH_MAX];
     static char local_path_and_file[PATH_MAX];
 
     dr = opendir (path_with_uploads); 
@@ -127,12 +131,20 @@ int ftp_upload_files (const char *path_with_uploads, const char *usrpwd) {
         curl_easy_setopt (curl, CURLOPT_USERPWD, usrpwd);
         curl_easy_setopt (curl, CURLOPT_VERBOSE, 0L);
         curl_easy_setopt (curl, CURLOPT_NOPROGRESS, 1L);
+        curl_easy_setopt (curl, CURLOPT_FTP_CREATE_MISSING_DIRS, CURLFTP_CREATE_DIR);
+        curl_easy_setopt (curl, CURLOPT_NEW_DIRECTORY_PERMS, 0755L); /* Default is 0755 */
+        curl_easy_setopt (curl, CURLOPT_NEW_FILE_PERMS, 0644L); /* Default is 0644 */
 
         while ((de = readdir (dr)) != NULL) {
             if ((strcmp (".", de->d_name) != 0) && (strcmp ("..", de->d_name) != 0)) {
-                strcpy (remote_url_and_file, remote_url); strcat (remote_url_and_file, de->d_name);
-                strcpy (local_path_and_file, path_with_uploads); strcat (local_path_and_file, "/"); strcat (local_path_and_file, de->d_name);
-                printf ("\nGoing to upload [%s] to [%s]", local_path_and_file, remote_url_and_file);
+                strcpy (remote_url_and_file, remote_url);
+                strcat (remote_url_and_file, remote_dir);
+                strcat (remote_url_and_file, "/");
+                strcat (remote_url_and_file, de->d_name);
+                strcpy (local_path_and_file, path_with_uploads);
+                strcat (local_path_and_file, "/");
+                strcat (local_path_and_file, de->d_name);
+                //printf ("\nGoing to upload [%s] to [%s]", local_path_and_file, remote_url_and_file);
                 /* specify target */ 
                 curl_easy_setopt (curl, CURLOPT_URL, remote_url_and_file);
                 /* get the file size of the local file */ 
@@ -142,7 +154,7 @@ int ftp_upload_files (const char *path_with_uploads, const char *usrpwd) {
                     return -1;
                 }
                 fsize = (curl_off_t)file_info.st_size;
-                printf ("\nLocal file size: %" CURL_FORMAT_CURL_OFF_T " bytes.", fsize);
+                //printf ("\nLocal file size: %" CURL_FORMAT_CURL_OFF_T " bytes.", fsize);
                 /* get a FILE * of the same file */ 
                 hd_src = fopen (local_path_and_file, "rb");
                 /* now specify which file to upload */ 
@@ -153,10 +165,10 @@ int ftp_upload_files (const char *path_with_uploads, const char *usrpwd) {
                 res = curl_easy_perform (curl);
                 /* Check for errors */ 
                 if (res == CURLE_OK) {
-                    printf ("\nFile [%s] uploaded successfully", local_path_and_file);
+                    //printf ("\nFile [%s] uploaded successfully", local_path_and_file);
                     /* remove file if upload successfull */
                     if (remove (local_path_and_file) == 0) {
-                        printf ("\nFile [%s] deleted successfully", local_path_and_file);
+                        //printf ("\nFile [%s] deleted successfully", local_path_and_file);
                     } else {
                         printf ("\nError: unable to delete file [%s]", local_path_and_file);
                     }
