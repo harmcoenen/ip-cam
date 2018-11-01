@@ -401,54 +401,57 @@ static void what_time_is_it (char *newtime) {
     strcpy (newtime, time_string);
 }
 
+static void what_hour_is_it (char *newhour) {
+    time_t seconds_since_epoch;
+    struct tm *time_info;
+    char time_string[20];
+
+    /* The function time_t time(time_t *seconds) returns the time since the Epoch (00:00:00 UTC, January 1, 1970), measured in seconds. */
+    /* If seconds is not NULL, the return value is also stored in variable seconds. */
+    time (&seconds_since_epoch); /* See https://www.tutorialspoint.com/c_standard_library/c_function_time.htm */
+    time_info = localtime (&seconds_since_epoch); /* See https://www.tutorialspoint.com/c_standard_library/c_function_localtime.htm */
+    strftime (time_string, 20, "%Y.%m.%d-%Hhrs", time_info); /* See https://www.tutorialspoint.com/c_standard_library/c_function_strftime.htm */
+    strcpy (newhour, time_string);
+}
+
 /* This function is called periodically */
 static void *ftp_upload (void *arg) {
     char upload_file_fullname[PATH_MAX];
+    int n_uploaded_files = 0;
     time_t start_time, end_time;
 
     pthread_mutex_lock (&ftp_mutex);
     time (&start_time);
-    g_print ("\nThread (ptid %08x) ftp_upload started %s", (int)pthread_self (), asctime (localtime (&start_time)));
+    //g_print ("\nThread (ptid %08x) ftp_upload started %s", (int)pthread_self (), asctime (localtime (&start_time)));
 
     if (appl == VIDEO) {
-        g_print ("\nFTP upload video");
+        //g_print ("\nFTP upload video");
         if (get_list_of_files_to_upload () > 0) {
             strcpy (upload_file_fullname, uploads_dir); strcat (upload_file_fullname, "/"); strcat (upload_file_fullname, upload_file);
             if (ftp_upload_file (upload_file_fullname, upload_file, username_passwd) == 0) {
-                g_print ("\nFile [%s] uploaded successfully", upload_file);
+                //g_print ("\nFile [%s] uploaded successfully", upload_file);
             }
         }
     } else if (appl == PHOTO) {
         char remote_dir[20];
-        what_time_is_it (remote_dir);
-        g_print ("\nFTP upload photo");
-        if (ftp_upload_files (uploads_dir, remote_dir, username_passwd) == 0) {
-            //g_print ("\nUpload of files finished without problems");
-        }
+        what_hour_is_it (remote_dir);
+        //g_print ("\nFTP upload photo");
+        n_uploaded_files = ftp_upload_files (uploads_dir, remote_dir, username_passwd);
     }
 
     time (&end_time);
-    g_print ("\nThread ftp_upload execution time = %f", difftime (end_time, start_time));
+    g_print ("\nThread (ptid %08x) ftp_upload execution time = %.2f seconds, %d files uploaded.", (int)pthread_self (), difftime (end_time, start_time), n_uploaded_files);
     pthread_mutex_unlock (&ftp_mutex);
 }
 
 /* This function is called periodically */
 static gboolean upload_timer (CustomData *data) {
-    time_t start_time, end_time;
     int err;
-
-    time (&start_time);
-    g_print ("\nUpload timer expired at %s", asctime (localtime (&start_time)));
 
     err = pthread_create (&ftp_thread_id, NULL, &ftp_upload, NULL);
     if (err != 0) {
         g_print ("\nCan't create ftp upoad thread: [%s]", strerror (err));
-    } else {
-        g_print ("\nThread for ftp upoad created successfully");
     }
-
-    time (&end_time);
-    g_print ("\nUpload timer execution time = %f", difftime (end_time, start_time));
 
     return TRUE; /* Otherwise the callback will be cancelled */
 }
@@ -937,7 +940,7 @@ int main (int argc, char *argv[]) {
     /* Register a function that GLib will call every x seconds */
     mainloop_timer_id = g_timeout_add_seconds (1, (GSourceFunc)mainloop_timer, &data);
     snapshot_timer_id = g_timeout_add_seconds (data.appl_param, (GSourceFunc)snapshot_timer, &data);
-    upload_timer_id = g_timeout_add_seconds (30 * 60, (GSourceFunc)upload_timer, &data);
+    upload_timer_id = g_timeout_add_seconds (60, (GSourceFunc)upload_timer, &data);
 
     while (!user_interrupt) {
         runs++;

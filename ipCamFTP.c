@@ -110,6 +110,7 @@ int ftp_upload_files (const char *path_with_uploads, const char *remote_dir, con
     curl_off_t fsize;
     DIR *dr = NULL;
     struct dirent *de;
+    int n_uploaded_files = 0;
 
     static char remote_url_and_file[PATH_MAX];
     static char local_path_and_file[PATH_MAX];
@@ -165,6 +166,7 @@ int ftp_upload_files (const char *path_with_uploads, const char *remote_dir, con
                 res = curl_easy_perform (curl);
                 /* Check for errors */ 
                 if (res == CURLE_OK) {
+                    n_uploaded_files++;
                     //printf ("\nFile [%s] uploaded successfully", local_path_and_file);
                     /* remove file if upload successfull */
                     if (remove (local_path_and_file) == 0) {
@@ -185,5 +187,5 @@ int ftp_upload_files (const char *path_with_uploads, const char *remote_dir, con
 
     curl_global_cleanup ();
     closedir (dr);
-    return 0;
+    return (n_uploaded_files);
 }

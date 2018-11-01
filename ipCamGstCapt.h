@@ -77,6 +77,7 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data);
 static GstPadProbeReturn pad_probe_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data);
 int get_list_of_files_to_upload (void);
 static void what_time_is_it (char *newtime);
+static void what_hour_is_it (char *newhour);
 static void *ftp_upload (void *arg);
 static gboolean upload_timer (CustomData *data);
 static gboolean snapshot_timer (CustomData *data);
