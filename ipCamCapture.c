@@ -13,7 +13,7 @@
 #include <dirent.h>
 #include <glib.h>
 #include <pthread.h>
-#include "ipCamGstCapt.h"
+#include "ipCamCapture.h"
 #include "ipCamPrinting.h"
 #include "ipCamFTP.h"
 
@@ -25,7 +25,7 @@ static void handle_pad_added (GstElement *src, GstPad *new_pad, CustomData *data
     GstStructure *new_pad_struct = NULL;
     const gchar *new_pad_type = NULL;
 
-    g_print ("\nReceived new pad '%s' from '%s'", GST_PAD_NAME (new_pad), GST_ELEMENT_NAME (src));
+    GST_INFO ("Received new pad '%s' from '%s'", GST_PAD_NAME (new_pad), GST_ELEMENT_NAME (src));
 
     /* Only try to link if the sink pad is not yet linked */
     if (!gst_pad_is_linked (sink_pad)) {
@@ -37,17 +37,17 @@ static void handle_pad_added (GstElement *src, GstPad *new_pad, CustomData *data
             /* Attempt the link */
             ret = gst_pad_link (new_pad, sink_pad);
             if (GST_PAD_LINK_SUCCESSFUL (ret)) {
-                g_print ("\nLink for video succeeded.");
+                GST_INFO ("Link for video succeeded.");
                 strcpy (src_video_padname, GST_PAD_NAME (new_pad));
                 //print_pad_capabilities (data->source, src_video_padname);
             } else {
-                g_print ("\nLink for video failed.");
+                GST_WARNING ("Link for video failed.");
             }
         } else {
-            g_print ("\nNew added pad has type '%s' which is not application/x-rtp. Ignoring.", new_pad_type);
+            GST_WARNING ("New added pad has type '%s' which is not application/x-rtp. Ignoring.", new_pad_type);
         }
     } else {
-        g_print ("\nDepay sink pad is already linked to Source src pad. Ignore this new added pad.");
+        GST_WARNING ("Depay sink pad is already linked to Source src pad. Ignore this new added pad.");
     }
 
     if (new_pad_caps != NULL) gst_caps_unref (new_pad_caps);
@@ -66,7 +66,7 @@ static gboolean handle_keyboard (GIOChannel *channel, GIOCondition cond, CustomD
     switch (retStatus) {
         case G_IO_STATUS_ERROR:
             if (error != NULL) {
-                //g_printf (error->message);
+                GST_ERROR ("%s", error->message);
                 exit(-10);
             }
             break;
@@ -78,9 +78,9 @@ static gboolean handle_keyboard (GIOChannel *channel, GIOCondition cond, CustomD
                 g_main_loop_quit (data->loop);
             } else if (strcmp ("motion\n", retString) == 0){
                 if (motion_detection) {
-                    g_print ("\nMotion %s, motion%sdetected", (motion) ? "started" : "stopped", (motion_detected) ? " " : " not ");
+                    GST_INFO ("Motion %s, motion%sdetected", (motion) ? "started" : "stopped", (motion_detected) ? " " : " not ");
                 } else {
-                    g_print ("\nMotion detection is disabled.");
+                    GST_INFO ("Motion detection is disabled.");
                 }
             } else if (strcmp ("motion start\n", retString) == 0){
                 motion = TRUE;
@@ -90,9 +90,9 @@ static gboolean handle_keyboard (GIOChannel *channel, GIOCondition cond, CustomD
             } else {
                 int index = g_ascii_strtoull (retString, NULL, 0);
                 if (index < 0 || index >= 8) {
-                  g_printerr ("\nIndex out of bounds.");
+                  GST_ERROR ("Index out of bounds.");
                 } else {
-                  g_print ("\nYou presses %d\n", index);
+                  GST_INFO ("You presses %d", index);
                 }
             }
             break;
@@ -112,7 +112,7 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
     switch (GST_MESSAGE_TYPE (msg)) {
         case GST_MESSAGE_EOS:
             /* end-of-stream */
-            g_print ("\nEnd-Of-Stream message [%s][%s] received.", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg));
+            GST_INFO ("End-Of-Stream message [%s][%s] received.", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg));
             gst_element_set_state (data->pipeline, GST_STATE_READY);
             g_main_loop_quit (data->loop);
             break;
@@ -122,8 +122,8 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
             gchar *dbg_info = NULL;
 
             gst_message_parse_error (msg, &err, &dbg_info);
-            g_printerr ("\nERROR from element %s: %s", GST_OBJECT_NAME (msg->src), err->message);
-            g_printerr ("\nDebugging info: %s", (dbg_info) ? dbg_info : "none");
+            GST_ERROR ("Error from element %s: %s", GST_OBJECT_NAME (msg->src), err->message);
+            GST_DEBUG ("Debug info: %s", (dbg_info) ? dbg_info : "none");
             g_error_free (err);
             g_free (dbg_info);
             gst_pad_add_probe (data->blockpad, GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM, pad_probe_cb, data->decoder, NULL);
@@ -137,8 +137,8 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
             gchar *dbg_info = NULL;
 
             gst_message_parse_warning (msg, &err, &dbg_info);
-            g_print ("\nWarning from element %s: %s", GST_OBJECT_NAME (msg->src), err->message);
-            g_print ("\nDebugging info: %s", (dbg_info) ? dbg_info : "none");
+            GST_WARNING ("Warning from element %s: %s", GST_OBJECT_NAME (msg->src), err->message);
+            GST_DEBUG ("Debug info: %s", (dbg_info) ? dbg_info : "none");
             g_error_free (err);
             g_free (dbg_info);
             break;
@@ -149,8 +149,8 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
             gchar *dbg_info = NULL;
 
             gst_message_parse_info (msg, &err, &dbg_info);
-            g_print ("\nInfo from element %s: %s", GST_OBJECT_NAME (msg->src), err->message);
-            g_print ("\nDebugging info: %s", (dbg_info) ? dbg_info : "none");
+            GST_INFO ("Info from element %s: %s", GST_OBJECT_NAME (msg->src), err->message);
+            GST_DEBUG ("Debug info: %s", (dbg_info) ? dbg_info : "none");
             g_error_free (err);
             g_free (dbg_info);
             break;
@@ -160,7 +160,7 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
             GstTagList *tags = NULL;
 
             gst_message_parse_tag (msg, &tags);
-            g_print ("\nTags from element %s", GST_OBJECT_NAME (msg->src));
+            GST_INFO ("Tags from element %s", GST_OBJECT_NAME (msg->src));
             gst_tag_list_foreach (tags, print_tag, NULL);
             gst_tag_list_unref (tags);
             break;
@@ -173,22 +173,22 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
             gst_message_parse_progress (msg, &type, &category, &text);
             switch (type) {
                 case GST_PROGRESS_TYPE_START:
-                    g_print ("\nProgress Start [%s][%s]", category, text);
+                    GST_INFO ("Progress Start [%s][%s]", category, text);
                     break;
                 case GST_PROGRESS_TYPE_CONTINUE:
-                    g_print ("\nProgress Continue [%s][%s]", category, text);
+                    GST_INFO ("Progress Continue [%s][%s]", category, text);
                     break;
                 case GST_PROGRESS_TYPE_COMPLETE:
-                    g_print ("\nProgress Complete [%s][%s]", category, text);
+                    GST_INFO ("Progress Complete [%s][%s]", category, text);
                     break;
                 case GST_PROGRESS_TYPE_CANCELED:
-                    g_print ("\nProgress Cancelled [%s][%s]", category, text);
+                    GST_INFO ("Progress Cancelled [%s][%s]", category, text);
                     break;
                 case GST_PROGRESS_TYPE_ERROR:
-                    g_print ("\nProgress Error [%s][%s]", category, text);
+                    GST_INFO ("Progress Error [%s][%s]", category, text);
                     break;
                 default:
-                    g_print ("\nUndefined progress type.");
+                    GST_WARNING ("Undefined progress type.");
                     break;
             }
             g_free (category);
@@ -203,7 +203,8 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
             if (data->is_live) break;
 
             gst_message_parse_buffering (msg, &percent);
-            g_print (" - Buffering (%3d%%) - \r", percent);
+            //g_print (" - Buffering (%3d%%) - \r", percent);
+            GST_INFO (" - Buffering (%3d%%) - ", percent);
             /* Wait until buffering is complete before start/resume playing */
             if (percent < 100)
                 gst_element_set_state (data->pipeline, GST_STATE_PAUSED);
@@ -214,7 +215,7 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
 
         case GST_MESSAGE_CLOCK_LOST:
             /* Get a new clock */
-            g_print ("\nClock lost message [%s][%s] received.", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg));
+            GST_WARNING ("Clock lost message [%s][%s] received.", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg));
             gst_element_set_state (data->pipeline, GST_STATE_PAUSED);
             gst_element_set_state (data->pipeline, GST_STATE_PLAYING);
             break;
@@ -226,60 +227,60 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
             const GValue *val;
             GstTask *task = NULL;
 
-            //g_print ("\nStream Status message [%s][%s] received.", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg));
+            GST_DEBUG ("Stream Status message [%s][%s] received.", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg));
             gst_message_parse_stream_status (msg, &type, &owner);
             path_source = gst_object_get_path_string (GST_MESSAGE_SRC (msg));
             path_owner = gst_object_get_path_string (GST_OBJECT (owner));
-            //g_print ("\ntype: %d    source: %s", type, path_source);
-            //g_print ("\n           owner:  %s", path_owner);
+            GST_DEBUG ("type: %d    source: %s", type, path_source);
+            GST_DEBUG ("           owner:  %s", path_owner);
             g_free (path_source);
             g_free (path_owner);
             val = gst_message_get_stream_status_object (msg);
-            //g_print ("\nobject: type %s, value %p", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
+            GST_DEBUG ("object: type %s, value %p", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
             /* see if we know how to deal with this object */
             if (G_VALUE_TYPE (val) == GST_TYPE_TASK) task = g_value_get_object (val);
             switch (type) {
                 case GST_STREAM_STATUS_TYPE_CREATE:
-                    //g_print ("\nStream status CREATE, created task %p, type %s, value %p", task, G_VALUE_TYPE_NAME (val), g_value_get_object (val));
+                    GST_DEBUG ("Stream status CREATE, created task %p, type %s, value %p", task, G_VALUE_TYPE_NAME (val), g_value_get_object (val));
                     break;
                 case GST_STREAM_STATUS_TYPE_ENTER:
-                    //g_print ("\nStream status ENTER, type %s, value %p", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
+                    GST_DEBUG ("Stream status ENTER, type %s, value %p", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
                     /* setpriority (PRIO_PROCESS, 0, -10); */
                     break;
                 case GST_STREAM_STATUS_TYPE_LEAVE:
-                    //g_print ("\nStream status LEAVE, type %s, value %p", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
+                    GST_DEBUG ("Stream status LEAVE, type %s, value %p", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
                     break;
                 case GST_STREAM_STATUS_TYPE_DESTROY:
-                    //g_print ("\nStream status DESTROY, type %s, value %p", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
+                    GST_DEBUG ("Stream status DESTROY, type %s, value %p", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
                     break;
                 case GST_STREAM_STATUS_TYPE_START:
-                    //g_print ("\nStream status START, type %s, value %p", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
+                    GST_DEBUG ("Stream status START, type %s, value %p", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
                     break;
                 case GST_STREAM_STATUS_TYPE_PAUSE:
-                    //g_print ("\nStream status PAUSE, type %s, value %p", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
+                    GST_DEBUG ("Stream status PAUSE, type %s, value %p", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
                     break;
                 case GST_STREAM_STATUS_TYPE_STOP:
-                    //g_print ("\nStream status STOP, type %s, value %p", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
+                    GST_DEBUG ("Stream status STOP, type %s, value %p", G_VALUE_TYPE_NAME (val), g_value_get_object (val));
                     break;
                 default:
-                    //g_print ("\nStream status unknown as default is hit.");
+                    GST_DEBUG ("Stream status unknown as default is hit.");
                     break;
             }
             break;
         }
 
         case GST_MESSAGE_STREAM_START:
-            g_print ("\nStream Start message [%s][%s] received.", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg));
+            GST_INFO ("Stream Start message [%s][%s] received.", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg));
             break;
 
         case GST_MESSAGE_ELEMENT: {
             const GstStructure *msg_struct = gst_message_get_structure (msg);
             if (gst_structure_has_name (msg_struct, "splitmuxsink-fragment-opened")) {
                 strcpy (openedfilename, gst_structure_get_string (msg_struct, "location"));
-                g_print ("\nCapture filename just opened is: [%s]", openedfilename);
+                GST_INFO ("Capture filename just opened is: [%s]", openedfilename);
             } else if (gst_structure_has_name (msg_struct, "splitmuxsink-fragment-closed")) {
                 strcpy (closedfilename, gst_structure_get_string (msg_struct, "location"));
-                g_print ("\nCapture filename just closed is: [%s]", closedfilename);
+                GST_INFO ("Capture filename just closed is: [%s]", closedfilename);
                 if (motion_detection) {
                     if (motion_detected) {
                         /* Move it to the ftp upload directory to keep it safe */
@@ -295,13 +296,13 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
                 if (gst_structure_has_field (msg_struct, "motion_begin")) {
                     motion = TRUE;
                     motion_detected = TRUE;
-                    g_print ("\nMotion detected in area(s): %s", gst_structure_get_string (msg_struct, "motion_cells_indices"));
+                    GST_INFO ("Motion detected in area(s): %s", gst_structure_get_string (msg_struct, "motion_cells_indices"));
                 } else if (gst_structure_has_field (msg_struct, "motion_finished")) {
                     motion = FALSE;
-                    g_print ("\nMotion end");
+                    GST_INFO ("Motion end");
                 }
             } else {
-                g_print ("\nElement message [%s][%s][%s] received (unhandled).", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg), gst_structure_get_name (msg_struct));
+                GST_WARNING ("Element message [%s][%s][%s] received (unhandled).", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg), gst_structure_get_name (msg_struct));
             }
             break;
         }
@@ -311,17 +312,17 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
             if (GST_MESSAGE_SRC (msg) == GST_OBJECT (data->pipeline)) {
                 GstState old_state, new_state, pending_state;
                 gst_message_parse_state_changed (msg, &old_state, &new_state, &pending_state);
-                g_print ("\nPipeline state changed from %s to %s", gst_element_state_get_name (old_state), gst_element_state_get_name (new_state));
+                GST_INFO ("Pipeline state changed from %s to %s", gst_element_state_get_name (old_state), gst_element_state_get_name (new_state));
                 /* Print the current capabilities of the source pad */
                 if (new_state == GST_STATE_PLAYING) {
-                    //print_pad_capabilities (data->source, src_video_padname);
-                    //print_pad_capabilities (data->convert, "sink");
+                    print_pad_capabilities (data->source, src_video_padname);
+                    print_pad_capabilities (data->convert, "sink");
                 }
             }
             break;
 
         case GST_MESSAGE_LATENCY:
-            g_print ("\nRecalculate latency");
+            GST_INFO ("Recalculate latency");
             gst_bin_recalculate_latency ( GST_BIN (data->pipeline));
             break;
 
@@ -330,17 +331,14 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
             guint64 running_time, stream_time, timestamp, duration;
 
             gst_message_parse_qos (msg, &live, &running_time, &stream_time, &timestamp, &duration);
-            g_print ("\nQoS info: [%s]", (live) ? "LIVE" : "Not live");
-            g_print (", rt [%" G_GUINT64_FORMAT "]", running_time);
-            g_print (", st [%" G_GUINT64_FORMAT "]", stream_time);
-            g_print (", ts [%" G_GUINT64_FORMAT "]", timestamp);
-            g_print (", dur [%" G_GUINT64_FORMAT "]", duration);
+            GST_INFO ("QoS info: [%s], rt [%" G_GUINT64_FORMAT "], st [%" G_GUINT64_FORMAT "], ts [%" G_GUINT64_FORMAT "], dur [%" G_GUINT64_FORMAT "]", 
+                        (live) ? "LIVE" : "Not live", running_time, stream_time, timestamp, duration);
             break;
         }
 
         default:
             /* Unhandled message */
-            g_printerr ("\nUnhandled message [%s][%s] received.", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg));
+            GST_WARNING ("Unhandled message [%s][%s] received.", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg));
             break;
     }
 }
@@ -348,7 +346,7 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
 static GstPadProbeReturn pad_probe_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data) {
     GstPad *sinkpad;
 
-    g_print ("\nPad is blocked now");
+    GST_INFO ("Pad is blocked now");
 
     /* remove the probe first */
     //gst_pad_remove_probe (pad, GST_PAD_PROBE_INFO_ID (info));
@@ -369,7 +367,7 @@ int get_list_of_files_to_upload (void) {
 
     DIR *dr = opendir (uploads_dir); 
     if (dr == NULL) {
-        g_print ("\nCould not open current directory");
+        GST_ERROR ("Could not open current directory");
         return 0;
     }
     while ((de = readdir (dr)) != NULL) {
@@ -377,9 +375,9 @@ int get_list_of_files_to_upload (void) {
             if (file_found == FALSE){
                 strcpy (upload_file, de->d_name);
                 file_found = TRUE;
-                g_print ("\nFound file to upload: [%s]", upload_file);
+                GST_INFO ("Found file to upload: [%s]", upload_file);
             } else {
-                g_print ("\nFound another file to upload later: [%s]", de->d_name);
+                GST_DEBUG ("Found another file to upload later: [%s]", de->d_name);
             }
             n_files++;
         }
@@ -422,25 +420,25 @@ static void *ftp_upload (void *arg) {
 
     pthread_mutex_lock (&ftp_mutex);
     time (&start_time);
-    //g_print ("\nThread (ptid %08x) ftp_upload started %s", (int)pthread_self (), asctime (localtime (&start_time)));
+    GST_INFO ("Thread (ptid %08x) ftp_upload started %s", (int)pthread_self (), asctime (localtime (&start_time)));
 
     if (appl == VIDEO) {
-        //g_print ("\nFTP upload video");
+        GST_INFO ("FTP upload video");
         if (get_list_of_files_to_upload () > 0) {
             strcpy (upload_file_fullname, uploads_dir); strcat (upload_file_fullname, "/"); strcat (upload_file_fullname, upload_file);
             if (ftp_upload_file (upload_file_fullname, upload_file, username_passwd) == 0) {
-                //g_print ("\nFile [%s] uploaded successfully", upload_file);
+                GST_INFO ("File [%s] uploaded successfully", upload_file);
             }
         }
     } else if (appl == PHOTO) {
         char remote_dir[20];
         what_hour_is_it (remote_dir);
-        //g_print ("\nFTP upload photo");
+        GST_INFO ("FTP upload photo");
         n_uploaded_files = ftp_upload_files (uploads_dir, remote_dir, username_passwd);
     }
 
     time (&end_time);
-    g_print ("\nThread (ptid %08x) ftp_upload execution time = %.2f seconds, %d files uploaded.", (int)pthread_self (), difftime (end_time, start_time), n_uploaded_files);
+    GST_INFO ("Thread (ptid %08x) ftp_upload execution time = %.2f seconds, %d files uploaded.", (int)pthread_self (), difftime (end_time, start_time), n_uploaded_files);
     pthread_mutex_unlock (&ftp_mutex);
 }
 
@@ -450,7 +448,7 @@ static gboolean upload_timer (CustomData *data) {
 
     err = pthread_create (&ftp_thread_id, NULL, &ftp_upload, NULL);
     if (err != 0) {
-        g_print ("\nCan't create ftp upoad thread: [%s]", strerror (err));
+        GST_ERROR ("Can't create ftp upoad thread: [%s]", strerror (err));
     }
 
     return TRUE; /* Otherwise the callback will be cancelled */
@@ -460,7 +458,7 @@ static gboolean upload_timer (CustomData *data) {
 static gboolean snapshot_timer (CustomData *data) {
     if (appl == PHOTO) {
         if (save_snapshot (data) == 0) {
-            //g_print ("\nSnapshot saved.");
+            GST_INFO ("Snapshot saved.");
             strcpy (closedfilename, capture_file);
             move_to_upload_directory (data);
         }
@@ -481,15 +479,15 @@ static gboolean mainloop_timer (CustomData *data) {
 static void handle_interrupt_signal (int signal) {
     switch (signal) {
         case SIGINT:
-            g_print ("\nCaught SIGINT, please wait....");
+            GST_WARNING ("Caught SIGINT, please wait....");
             g_source_remove (upload_timer_id);
             user_interrupt = TRUE;
             break;
         case SIGUSR1:
-            g_print ("\nCaught SIGUSR1");
+            GST_WARNING ("Caught SIGUSR1");
             break;
         default:
-            g_print ("\nCaught signal: %d", signal);
+            GST_WARNING ("Caught signal: %d", signal);
             break;
     }
 }
@@ -507,9 +505,9 @@ static gboolean move_to_upload_directory (CustomData *data) {
         strcat (preupl_file, extension_photo);
     }
     if (rename (closedfilename, preupl_file) == -1) {
-        g_printerr ("\nrename returned error [%s]", strerror (errno));
+        GST_ERROR ("Rename returned error [%s]", strerror (errno));
     } else {
-        //g_print("\nSuccesfully moved file [%s] to [%s]", closedfilename, preupl_file);
+        GST_INFO ("Succesfully moved file [%s] to [%s]", closedfilename, preupl_file);
     }
     return TRUE;
 }
@@ -537,20 +535,20 @@ static int prepare_dir (const char *dir_to_create) {
 
     switch (is_dir (dir_to_create)) {
         case -2: // not a dir
-            g_printerr ("\n[%s] is not a valid directory.", dir_to_create);
+            GST_ERROR ("[%s] is not a valid directory.", dir_to_create);
             retval = -2;
             break;
        case -1: // does not exist
             if (mkdir (dir_to_create, 0777) == -1) {
-                g_printerr ("\nmkdir returned error [%s].", strerror (errno));
+                GST_ERROR ("mkdir returned error [%s].", strerror (errno));
                 retval = -1;
             } else {
-                g_print("\nSuccesfully created directory [%s]", dir_to_create);
+                GST_INFO ("Succesfully created directory [%s]", dir_to_create);
                 retval = 0;
             }
             break;
         case 1: // exists
-            g_print("\nDirectory [%s] already exists.", dir_to_create);
+            GST_INFO ("Directory [%s] already exists.", dir_to_create);
             retval = 0;
             break;
         default:
@@ -568,19 +566,19 @@ static int prepare_work_environment (CustomData *data) {
     // Determine the current working directory and prepare it
     working_dir = getcwd (NULL, 0);
     if (working_dir != NULL) {
-        g_print ("\nCurrent working dir: [%s][%lu]", working_dir, strlen (working_dir));
+        GST_INFO ("Current working dir: [%s][%lu]", working_dir, strlen (working_dir));
         strcpy (capture_dir, working_dir); strcat (capture_dir, capture_subdir);
         strcpy (uploads_dir, working_dir); strcat (uploads_dir, uploads_subdir);
         if (prepare_dir (capture_dir) == 0) {
-            g_print ("\nDirectory [%s] is available", capture_dir);
+            GST_INFO ("Directory [%s] is available", capture_dir);
         } else {
-            g_printerr ("\nDirectory [%s] is NOT available", capture_dir);
+            GST_ERROR ("Directory [%s] is NOT available", capture_dir);
             retval = -1;
         }
         if (prepare_dir (uploads_dir) == 0) {
-            g_print ("\nDirectory [%s] is available", uploads_dir);
+            GST_INFO ("Directory [%s] is available", uploads_dir);
         } else {
-            g_printerr ("\nDirectory [%s] is NOT available", uploads_dir);
+            GST_ERROR ("Directory [%s] is NOT available", uploads_dir);
             retval = -1;
         }
         strcpy (capture_file, capture_dir); strcat (capture_file, "/");
@@ -589,11 +587,11 @@ static int prepare_work_environment (CustomData *data) {
         } else if (appl == PHOTO) {
             strcat (capture_file, snapshot_filename); strcat (capture_file, extension_photo);
         }
-        g_print ("\nCapture file is [%s]", capture_file);
+        GST_INFO ("Capture file is [%s]", capture_file);
 
         free (working_dir);
     } else {
-        g_printerr ("\nCould not find the current working directory.");
+        GST_ERROR ("Could not find the current working directory.");
         retval = -1;
     }
 
@@ -648,15 +646,15 @@ static int handle_arguments (CustomData *data) {
     g_print ("\napplication [%s]", application);
     g_print ("\ntiming [%d]", timing);
     g_print ("\nMotion detection %s", (motion_detection) ? "enabled" : "disabled");
-    g_print ("\n---------------------------------------");
+    g_print ("\n---------------------------------------\n");
+
     return 0;
 }
 
 static int create_video_pipeline (int argc, char *argv[], CustomData *data) {
-    int retval = 0;
     GstCaps *caps;
 
-    g_print ("\nCreating video pipeline.");
+    GST_INFO ("Creating video pipeline.");
 
     /* Create the elements */
     data->source = gst_element_factory_make ("rtspsrc", "source");
@@ -681,12 +679,12 @@ static int create_video_pipeline (int argc, char *argv[], CustomData *data) {
 
     if (!data->pipeline || !data->source || !data->depay || !data->decoder || !data->convert || 
         !data->scale || !data->encoder || !data->parser || !data->muxer || !data->splitsink) {
-        g_printerr ("\nNot all elements could be created.\n");
+        GST_ERROR ("Not all elements could be created.");
         return -1;
     }
     if (motion_detection) {
         if (!data->motioncells || !data->convert_b) {
-            g_printerr ("\nNot all elements (motion) could be created.\n");
+            GST_ERROR ("Not all elements (motion) could be created.");
             return -1;
         }
     }
@@ -700,17 +698,17 @@ static int create_video_pipeline (int argc, char *argv[], CustomData *data) {
 
     /* Note that we are NOT linking the source at this point. We will do it later. */
     if (!gst_element_link_many (data->depay, data->decoder, data->convert, NULL)) {
-        g_printerr ("\nElements for first part of video path could not be linked.\n");
+        GST_ERROR ("Elements for first part of video path could not be linked.");
         return -1;
     }
     if (motion_detection) {
         if (!gst_element_link_many (data->convert, data->motioncells, data->convert_b, data->scale, NULL)) {
-            g_printerr ("\nElements for second part (with motion) of video path could not be linked.\n");
+            GST_ERROR ("Elements for second part (with motion) of video path could not be linked.");
             return -1;
         }
     } else {
         if (!gst_element_link_many (data->convert, data->scale, NULL)) {
-            g_printerr ("\nElements for second part (without motion) of video path could not be linked.\n");
+            GST_ERROR ("Elements for second part (without motion) of video path could not be linked.");
             return -1;
         }
     }
@@ -722,14 +720,14 @@ static int create_video_pipeline (int argc, char *argv[], CustomData *data) {
     //caps = gst_caps_from_string("video/x-raw, width=1280, height=720"); // Change scale from HD 1080 to HD 720
     caps = gst_caps_from_string ("video/x-raw, width=1024, height=576"); // Change scale from HD 1080 to PAL
     if (!gst_element_link_filtered (data->scale, data->encoder, caps)) {
-        g_printerr ("\nElement scale could not be linked to element encoder.\n");
+        GST_ERROR ("Element scale could not be linked to element encoder.");
         return -1;
     }
     gst_caps_unref (caps);
 
     /* Link the rest of the pipeline */
     if (!gst_element_link_many (data->encoder, data->parser, data->splitsink, NULL)) {
-        g_printerr ("\nElements for last part of video path could not be linked.\n");
+        GST_ERROR ("Elements for last part of video path could not be linked.");
         return -1;
     }
 
@@ -758,14 +756,13 @@ static int create_video_pipeline (int argc, char *argv[], CustomData *data) {
     g_object_set (data->splitsink, "max-files", 30, NULL); // default is 0
     g_object_set (data->splitsink, "muxer", data->muxer, NULL);
 
-    return (retval);
+    return 0;
 }
 
 static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
-    int retval = 0;
     GstCaps *caps;
 
-    g_print ("\nCreating photo pipeline.");
+    GST_INFO ("Creating photo pipeline.");
 
     /* Create the elements */
     data->source = gst_element_factory_make ("rtspsrc", "source");
@@ -789,12 +786,12 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
 
     if (!data->pipeline || !data->source || !data->depay || !data->decoder || !data->tee || 
         !data->queue || !data->convert || !data->scale || !data->videosink) {
-        g_printerr ("\nNot all elements could be created.\n");
+        GST_ERROR ("Not all elements could be created.");
         return -1;
     }
     if (motion_detection) {
         if (!data->motioncells || !data->convert_b) {
-            g_printerr ("\nNot all elements (motion) could be created.\n");
+            GST_ERROR ("Not all elements (motion) could be created.");
             return -1;
         }
     }
@@ -808,17 +805,17 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
 
     /* Note that we are NOT linking the source at this point. We will do it later. */
     if (!gst_element_link_many (data->depay, data->decoder, data->convert, NULL)) {
-        g_printerr ("\nElements for first part of photo path could not be linked.\n");
+        GST_ERROR ("Elements for first part of photo path could not be linked.");
         return -1;
     }
     if (motion_detection) {
         if (!gst_element_link_many (data->convert, data->motioncells, data->convert_b, data->scale, NULL)) {
-            g_printerr ("\nElements for second part (with motion) of photo path could not be linked.\n");
+            GST_ERROR ("Elements for second part (with motion) of photo path could not be linked.");
             return -1;
         }
     } else {
         if (!gst_element_link_many (data->convert, data->scale, NULL)) {
-            g_printerr ("\nElements for second part (without motion) of photo path could not be linked.\n");
+            GST_ERROR ("Elements for second part (without motion) of photo path could not be linked.");
             return -1;
         }
     }
@@ -830,7 +827,7 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     //caps = gst_caps_from_string("video/x-raw, width=1280, height=720"); // Change scale from HD 1080 to HD 720
     caps = gst_caps_from_string ("video/x-raw, width=1024, height=576"); // Change scale from HD 1080 to PAL
     if (!gst_element_link_filtered (data->scale, data->videosink, caps)) {
-        g_printerr ("\nElement scale could not be linked to element encoder.\n");
+        GST_ERROR ("Element scale could not be linked to element encoder.");
         return -1;
     }
     gst_caps_unref (caps);
@@ -850,7 +847,7 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
         g_object_set (data->motioncells, "minimummotionframes", 1, NULL);
     }
 
-    return (retval);
+    return 0;
 }
 
 static int save_snapshot (CustomData *data) {
@@ -862,7 +859,7 @@ static int save_snapshot (CustomData *data) {
 
     g_object_get (data->videosink, "last-sample", &last_sample, NULL);
     if (last_sample == NULL) {
-        g_printerr ("\nError getting last sample from videosink");
+        GST_ERROR ("Error getting last sample from videosink");
         return -1;
     }
 
@@ -872,7 +869,7 @@ static int save_snapshot (CustomData *data) {
     gst_sample_unref (last_sample);
 
     if (converted_sample == NULL && err) {
-        g_printerr ("\nError converting sample: %s", err->message);
+        GST_ERROR ("Error converting sample: %s", err->message);
         g_error_free (err);
         return -1;
     }
@@ -880,7 +877,7 @@ static int save_snapshot (CustomData *data) {
     buf = gst_sample_get_buffer (converted_sample);
     if (gst_buffer_map (buf, &map_info, GST_MAP_READ)) {
         if (!g_file_set_contents (capture_file, (const char *) map_info.data, map_info.size, &err)) {
-            g_printerr ("\nCould not save thumbnail: %s", err->message);
+            GST_ERROR ("Could not save thumbnail: %s", err->message);
             g_error_free (err);
             return -1;
         }
@@ -905,6 +902,9 @@ int main (int argc, char *argv[]) {
     /* Initialize GStreamer */
     gst_init (&argc, &argv);
 
+    /* Initialize the customized verbose category ipcam */
+    GST_DEBUG_CATEGORY_INIT (ipcam, "ipcam", 2, "Verbose category for ipcamcapture");
+
     /* Initialize data structures and arrays */
     initialize (&data);
 
@@ -912,17 +912,17 @@ int main (int argc, char *argv[]) {
     g_option_context_add_main_entries (context, options, NULL);
     g_option_context_add_group (context, gst_init_get_option_group ());
     if (!g_option_context_parse (context, &argc, &argv, &error)) {
-      g_print ("\nParsing the options has failed: %s\n", error->message);
+      GST_ERROR ("Parsing the options has failed: %s", error->message);
       return -1;
     }
 
     if (handle_arguments (&data) != 0) {
-        g_print ("\n");
+        GST_ERROR ("Problem with arguments.");
         return -1;
     }
 
     if (prepare_work_environment (&data) != 0) {
-        g_print ("\n");
+        GST_ERROR ("Problem with preparing work environment.");
         return -1;
     }
 
@@ -931,10 +931,10 @@ int main (int argc, char *argv[]) {
     sa.sa_flags = SA_RESTART;                    // Restart the system call, if at all possible
     sigfillset (&sa.sa_mask);                     // Block every signal during the handler
     if (sigaction (SIGINT, &sa, NULL) == -1) {    // Intercept SIGINT
-        g_printerr ("\nError: cannot handle SIGINT");
+        GST_ERROR ("Error: cannot handle SIGINT");
     }
     if (sigaction (SIGUSR1, &sa, NULL) == -1) {   // Intercept SIGUSR1
-        g_printerr ("\nError: cannot handle SIGUSR1");
+        GST_ERROR ("Error: cannot handle SIGUSR1");
     }
 
     /* Register a function that GLib will call every x seconds */
@@ -948,18 +948,20 @@ int main (int argc, char *argv[]) {
         switch (appl) {
             case VIDEO:
                 if (create_video_pipeline (argc, argv, &data) != 0) {
+                    GST_ERROR ("Failed to create video pipeline.");
                     gst_object_unref (data.pipeline);
                     return -1;
                 }
                 break;
             case PHOTO:
                 if (create_photo_pipeline (argc, argv, &data) != 0) {
+                    GST_ERROR ("Failed to create photo pipeline.");
                     gst_object_unref (data.pipeline);
                     return -1;
                 }
                 break;
             default:
-                g_printerr ("\nThis application is not yet supported.\n");
+                GST_ERROR ("This application is not yet supported.");
                 return -1;
                 break;
         }
@@ -968,17 +970,17 @@ int main (int argc, char *argv[]) {
         g_signal_connect (data.source, "pad-added", G_CALLBACK (handle_pad_added), &data);
 
         /* Start playing the pipeline */
-        g_print ("\nGo to PLAYING, run [%d]", runs);
+        GST_INFO ("Go to PLAYING, run [%d]", runs);
         ret = gst_element_set_state (data.pipeline, GST_STATE_PLAYING);
         if (ret == GST_STATE_CHANGE_FAILURE) {
-            g_printerr ("\nUnable to set the pipeline to the playing state.\n");
+            GST_ERROR ("Unable to set the pipeline to the playing state.");
             gst_object_unref (data.pipeline);
             return -1;
         } else if (ret == GST_STATE_CHANGE_NO_PREROLL) {
             data.is_live = TRUE;
-            g_print ("\nLive stream");
+            GST_INFO ("Live stream.");
         } else {
-            g_print ("\nNot a live stream");
+            GST_INFO ("Not a live stream.");
         }
 
         /* Listen to the bus */

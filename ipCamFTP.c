@@ -1,3 +1,4 @@
+#include <gst/gst.h>
 #include <stdio.h>
 #include <string.h>
 #include <curl/curl.h>
@@ -34,12 +35,12 @@ int ftp_upload_file (const char *pathfilename, const char *filename, const char 
 
     /* get the file size of the local file */ 
     if (stat (pathfilename, &file_info)) {
-        printf ("\nCouldn't open '%s': %s", pathfilename, strerror (errno));
+        GST_ERROR ("Couldn't open '%s': %s", pathfilename, strerror (errno));
         return 1;
     }
     fsize = (curl_off_t)file_info.st_size;
 
-    printf ("\nLocal file size: %" CURL_FORMAT_CURL_OFF_T " bytes.", fsize);
+    GST_DEBUG ("Local file size: %" CURL_FORMAT_CURL_OFF_T " bytes.", fsize);
 
     /* get a FILE * of the same file */ 
     hd_src = fopen (pathfilename, "rb");
@@ -85,12 +86,13 @@ int ftp_upload_file (const char *pathfilename, const char *filename, const char 
         if (res == CURLE_OK) {
             /* remove file if upload successfull */
             if (remove (pathfilename) == 0) {
-                printf ("\nFile [%s] deleted successfully", pathfilename);
+                GST_INFO ("File [%s] deleted successfully", pathfilename);
             } else {
-                printf ("\nError: unable to delete file [%s]", pathfilename);
+                GST_ERROR ("Unable to delete file [%s]", pathfilename);
             }
         } else {
-            fprintf (stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror (res));
+            GST_ERROR ("curl_easy_perform() failed: %s", curl_easy_strerror (res));
+            //fprintf (stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror (res));
         }
 
         /* always cleanup */ 
@@ -117,7 +119,7 @@ int ftp_upload_files (const char *path_with_uploads, const char *remote_dir, con
 
     dr = opendir (path_with_uploads); 
     if (dr == NULL) {
-        printf ("\nCould not open directory of files to upload.");
+        GST_ERROR ("Could not open directory of files to upload.");
         return -1;
     }
 
@@ -145,17 +147,17 @@ int ftp_upload_files (const char *path_with_uploads, const char *remote_dir, con
                 strcpy (local_path_and_file, path_with_uploads);
                 strcat (local_path_and_file, "/");
                 strcat (local_path_and_file, de->d_name);
-                //printf ("\nGoing to upload [%s] to [%s]", local_path_and_file, remote_url_and_file);
+                GST_INFO ("Going to upload [%s] to [%s]", local_path_and_file, remote_url_and_file);
                 /* specify target */ 
                 curl_easy_setopt (curl, CURLOPT_URL, remote_url_and_file);
                 /* get the file size of the local file */ 
                 if (stat (local_path_and_file, &file_info)) {
-                    printf ("\nCouldn't open '%s': %s", local_path_and_file, strerror (errno));
+                    GST_ERROR ("Couldn't open '%s': %s", local_path_and_file, strerror (errno));
                     curl_easy_cleanup (curl); curl_global_cleanup (); closedir (dr); /* always cleanup */
                     return -1;
                 }
                 fsize = (curl_off_t)file_info.st_size;
-                //printf ("\nLocal file size: %" CURL_FORMAT_CURL_OFF_T " bytes.", fsize);
+                GST_DEBUG ("Local file size: %" CURL_FORMAT_CURL_OFF_T " bytes.", fsize);
                 /* get a FILE * of the same file */ 
                 hd_src = fopen (local_path_and_file, "rb");
                 /* now specify which file to upload */ 
@@ -167,15 +169,16 @@ int ftp_upload_files (const char *path_with_uploads, const char *remote_dir, con
                 /* Check for errors */ 
                 if (res == CURLE_OK) {
                     n_uploaded_files++;
-                    //printf ("\nFile [%s] uploaded successfully", local_path_and_file);
+                    GST_INFO ("File [%s] uploaded successfully", local_path_and_file);
                     /* remove file if upload successfull */
                     if (remove (local_path_and_file) == 0) {
-                        //printf ("\nFile [%s] deleted successfully", local_path_and_file);
+                        GST_INFO ("File [%s] deleted successfully", local_path_and_file);
                     } else {
-                        printf ("\nError: unable to delete file [%s]", local_path_and_file);
+                        GST_ERROR ("Unable to delete file [%s]", local_path_and_file);
                     }
                 } else {
-                    fprintf (stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror (res));
+                    GST_ERROR ("curl_easy_perform() failed: %s", curl_easy_strerror (res));
+                    //fprintf (stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror (res));
                 }
                 fclose (hd_src); /* close the local file */ 
             }

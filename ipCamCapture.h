@@ -1,5 +1,8 @@
-#ifndef IPCAMGSTCAPT_H
-#define IPCAMGSTCAPT_H
+#ifndef IPCAMCAPTURE_H
+#define IPCAMCAPTURE_H
+
+GST_DEBUG_CATEGORY_STATIC (ipcam);
+#define GST_CAT_DEFAULT ipcam
 
 static const char *capture_subdir = "/cap";
 static const char *uploads_subdir = "/upl";
@@ -94,4 +97,4 @@ static int create_video_pipeline (int argc, char *argv[], CustomData *data);
 static int create_photo_pipeline (int argc, char *argv[], CustomData *data);
 static int save_snapshot (CustomData *data);
 
-#endif /* IPCAMGSTCAPT_H */
+#endif /* IPCAMCAPTURE_H */
