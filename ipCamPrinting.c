@@ -1,5 +1,9 @@
 #include <gst/gst.h>
 #include "ipCamPrinting.h"
+#include "ipCamCapture.h"
+
+GST_DEBUG_CATEGORY_EXTERN (ipcam);
+#define GST_CAT_DEFAULT ipcam
 
 /* Functions below print the Capabilities in a human-friendly format */
 gboolean print_field (GQuark field, const GValue * value, gpointer pfx) {

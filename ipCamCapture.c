@@ -17,6 +17,9 @@
 #include "ipCamPrinting.h"
 #include "ipCamFTP.h"
 
+GST_DEBUG_CATEGORY (ipcam);
+#define GST_CAT_DEFAULT ipcam
+
 /* This function will be called by the pad-added signal */
 static void handle_pad_added (GstElement *src, GstPad *new_pad, CustomData *data) {
     GstPad *sink_pad = gst_element_get_static_pad (data->depay, "sink");

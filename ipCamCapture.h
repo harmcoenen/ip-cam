@@ -1,9 +1,6 @@
 #ifndef IPCAMCAPTURE_H
 #define IPCAMCAPTURE_H
 
-GST_DEBUG_CATEGORY_STATIC (ipcam);
-#define GST_CAT_DEFAULT ipcam
-
 static const char *capture_subdir = "/cap";
 static const char *uploads_subdir = "/upl";
 static const char *appl_video = "video";

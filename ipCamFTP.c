@@ -13,6 +13,10 @@
 #endif
 #include <dirent.h>
 #include "ipCamFTP.h"
+#include "ipCamCapture.h"
+
+GST_DEBUG_CATEGORY_EXTERN (ipcam);
+#define GST_CAT_DEFAULT ipcam
 
 /* ftp.familiecoenen.nl port 21, /public/www/recordings */
 const char *remote_url = "ftp://ftp.familiecoenen.nl/";
