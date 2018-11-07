@@ -18,9 +18,6 @@
 GST_DEBUG_CATEGORY_EXTERN (ipcam);
 #define GST_CAT_DEFAULT ipcam
 
-/* ftp.familiecoenen.nl port 21, /public/www/recordings */
-const char *remote_url = "ftp://ftp.familiecoenen.nl/";
-
 static size_t read_callback (void *ptr, size_t size, size_t nmemb, void *stream) {
     size_t retcode = fread (ptr, size, nmemb, stream);
     return retcode;
@@ -63,6 +60,8 @@ int ftp_upload_file (const char *pathfilename, const char *filename, const char 
 
         /* specify target */ 
         curl_easy_setopt (curl, CURLOPT_URL, remote_url_and_file);
+
+        /* Set username and password */
         curl_easy_setopt (curl, CURLOPT_USERPWD, usrpwd);
 
         /* now specify which file to upload */ 
@@ -84,7 +83,7 @@ int ftp_upload_file (const char *pathfilename, const char *filename, const char 
         curl_easy_setopt (curl, CURLOPT_NEW_DIRECTORY_PERMS, 0755L); /* Default is 0755 */
         curl_easy_setopt (curl, CURLOPT_NEW_FILE_PERMS, 0644L); /* Default is 0644 */
 
-        /* Now run off and do what you've been told! */ 
+        /* Perform the custom request */ 
         res = curl_easy_perform (curl);
         /* Check for errors */ 
         if (res == CURLE_OK) {
@@ -168,7 +167,7 @@ int ftp_upload_files (const char *path_with_uploads, const char *remote_dir, con
                 curl_easy_setopt (curl, CURLOPT_READDATA, hd_src);
                 curl_easy_setopt (curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t)fsize);
 
-                /* Now run off and do what you've been told! */ 
+                /* Perform the custom request */ 
                 res = curl_easy_perform (curl);
                 /* Check for errors */ 
                 if (res == CURLE_OK) {
@@ -195,4 +194,83 @@ int ftp_upload_files (const char *path_with_uploads, const char *remote_dir, con
     curl_global_cleanup ();
     closedir (dr);
     return (n_uploaded_files);
+}
+
+int ftp_list_directory (const char *remote_dir, const char *usrpwd) {
+    CURL *curl;
+    CURLcode res = CURLE_OK;
+    static char remote_url_and_file[PATH_MAX];
+
+    /* In windows, this will init the winsock stuff */
+    curl_global_init (CURL_GLOBAL_ALL);
+
+    /* get a curl handle */
+    curl = curl_easy_init ();
+    if (curl) {
+        /* Set username and password */
+        curl_easy_setopt (curl, CURLOPT_USERPWD, usrpwd);
+         /* specify target */
+        strcpy (remote_url_and_file, remote_url);
+        strcat (remote_url_and_file, remote_dir);
+        curl_easy_setopt (curl, CURLOPT_URL, remote_url_and_file);
+        /* Set the custom request command */
+        curl_easy_setopt (curl, CURLOPT_CUSTOMREQUEST, "NLST"); /* NLST or LIST */
+
+        /* Perform the custom request */
+        res = curl_easy_perform (curl);
+        /* Check for errors */
+        if (res == CURLE_OK) {
+            GST_INFO ("List remote directory successful");
+        } else {
+            GST_ERROR ("curl_easy_perform() failed: %s", curl_easy_strerror (res));
+            //fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror (res));
+        }
+ 
+        /* Always cleanup */
+        curl_easy_cleanup(curl);
+    }
+
+    curl_global_cleanup ();
+    return (res);
+}
+
+int ftp_remove_directory (const char *remote_dir, const char *usrpwd) {
+    CURL *curl;
+    CURLcode res = CURLE_OK;
+    static char remote_url_and_file[PATH_MAX];
+    static char remove_cmd[50];
+
+    /* In windows, this will init the winsock stuff */
+    curl_global_init (CURL_GLOBAL_ALL);
+
+    /* get a curl handle */
+    curl = curl_easy_init ();
+    if (curl) {
+        /* Set username and password */
+        curl_easy_setopt (curl, CURLOPT_USERPWD, usrpwd);
+         /* specify target */ 
+        strcpy (remote_url_and_file, remote_url);
+        strcpy (remove_cmd, "RMD ");
+        strcat (remove_cmd, remote_dir);
+        GST_WARNING ("Delete remote directory command: %s", remove_cmd);
+        curl_easy_setopt (curl, CURLOPT_URL, remote_url_and_file);
+        /* Set the DELETE command specifying the existing folder */
+        curl_easy_setopt (curl, CURLOPT_CUSTOMREQUEST, remove_cmd);
+
+        /* Perform the custom request */
+        res = curl_easy_perform (curl);
+        /* Check for errors */
+        if (res == CURLE_OK) {
+            GST_WARNING ("Delete remote directory '%s' successful", remote_dir);
+        } else {
+            GST_ERROR ("curl_easy_perform() failed: %s", curl_easy_strerror (res));
+            //fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror (res));
+        }
+ 
+        /* Always cleanup */
+        curl_easy_cleanup(curl);
+    }
+
+    curl_global_cleanup ();
+    return (res);
 }

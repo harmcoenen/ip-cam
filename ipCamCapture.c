@@ -42,7 +42,7 @@ static void handle_pad_added (GstElement *src, GstPad *new_pad, CustomData *data
             if (GST_PAD_LINK_SUCCESSFUL (ret)) {
                 GST_INFO ("Link for video succeeded.");
                 strcpy (src_video_padname, GST_PAD_NAME (new_pad));
-                //print_pad_capabilities (data->source, src_video_padname);
+                print_pad_capabilities (data->source, src_video_padname);
             } else {
                 GST_WARNING ("Link for video failed.");
             }
@@ -417,7 +417,6 @@ static void what_hour_is_it (char *newhour) {
 
 /* This function is called periodically */
 static void *ftp_upload (void *arg) {
-    char upload_file_fullname[PATH_MAX];
     int n_uploaded_files = 0;
     time_t start_time, end_time;
 
@@ -425,9 +424,17 @@ static void *ftp_upload (void *arg) {
     time (&start_time);
     GST_INFO ("Thread (ptid %08x) ftp_upload started %s", (int)pthread_self (), asctime (localtime (&start_time)));
 
+    g_print ("\nFTP NLST begin\n");
+    ftp_list_directory (".", username_passwd);
+    g_print ("\nFTP NLST end\n");
+    g_print ("\nFTP RMD begin\n");
+    ftp_remove_directory ("2016.01.01-01hrs", username_passwd);
+    g_print ("\nFTP RMD end\n");
+
     if (appl == VIDEO) {
         GST_INFO ("FTP upload video");
         if (get_list_of_files_to_upload () > 0) {
+            char upload_file_fullname[PATH_MAX];
             strcpy (upload_file_fullname, uploads_dir); strcat (upload_file_fullname, "/"); strcat (upload_file_fullname, upload_file);
             if (ftp_upload_file (upload_file_fullname, upload_file, username_passwd) == 0) {
                 GST_INFO ("File [%s] uploaded successfully", upload_file);
