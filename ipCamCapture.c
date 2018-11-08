@@ -428,7 +428,7 @@ static void *ftp_upload (void *arg) {
     ftp_list_directory (".", username_passwd);
     g_print ("\nFTP NLST end\n");
     g_print ("\nFTP RMD begin\n");
-    ftp_remove_directory ("2016.01.01-01hrs", username_passwd);
+    ftp_remove_directory ("2018.11.01-20hrs/", username_passwd);
     g_print ("\nFTP RMD end\n");
 
     if (appl == VIDEO) {
