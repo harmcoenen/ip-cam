@@ -48,6 +48,11 @@ static GOptionEntry options [] =
 enum Application {VIDEO = 1, PHOTO = 2};
 enum Application appl;
 
+struct MemoryStruct {
+    char *memory;
+    size_t size;
+};
+
 /* Structure to contain all our information, so we can pass it to callbacks */
 typedef struct _CustomData {
     guint appl_param;

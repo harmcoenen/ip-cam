@@ -27,8 +27,8 @@ static size_t read_callback (void *ptr, size_t size, size_t nmemb, void *stream)
 static size_t write_memory_callback (void *contents, size_t size, size_t nmemb, void *userp) {
     size_t realsize = size * nmemb;
     struct MemoryStruct *mem = (struct MemoryStruct *)userp;
- 
-    char *ptr = realloc(mem->memory, mem->size + realsize + 1);
+
+    char *ptr = realloc (mem->memory, mem->size + realsize + 1);
     if (ptr == NULL) {
         /* out of memory! */
         GST_ERROR ("not enough memory (realloc returned NULL)");
@@ -210,7 +210,7 @@ int ftp_upload_files (const char *path_with_uploads, const char *remote_dir, con
     return (n_uploaded_files);
 }
 
-int ftp_list_directory (const char *remote_dir, const char *usrpwd) {
+int ftp_list_directory (const char *remote_dir, const char *usrpwd, void *list) {
     CURL *curl;
     CURLcode res = CURLE_OK;
     static char remote_url_and_file[PATH_MAX];
@@ -226,18 +226,26 @@ int ftp_list_directory (const char *remote_dir, const char *usrpwd) {
         strcpy (remote_url_and_file, remote_url);
         strcat (remote_url_and_file, remote_dir);
         curl_easy_setopt (curl, CURLOPT_URL, remote_url_and_file);
-        /* Set the custom request command */
         curl_easy_setopt (curl, CURLOPT_CUSTOMREQUEST, "NLST"); /* NLST or LIST */
+        curl_easy_setopt (curl, CURLOPT_WRITEFUNCTION, write_memory_callback); /* send all data to this function */
+        curl_easy_setopt (curl, CURLOPT_WRITEDATA, list); /* we pass our 'list' struct to the callback function */
+        curl_easy_setopt (curl, CURLOPT_USERAGENT, "libcurl-agent/1.0"); /* some servers don't like requests that are made without a user-agent field, so we provide one */
 
-        /* Perform the custom request */
         res = curl_easy_perform (curl);
-        /* Check for errors */
-        if (res == CURLE_OK) {
-            GST_INFO ("List remote directory successful");
+        if (res != CURLE_OK) {
+            GST_ERROR ("curl_easy_perform() failed: %d, %s", (int)res, curl_easy_strerror (res));
         } else {
-            GST_ERROR ("curl_easy_perform() failed: %s", curl_easy_strerror (res));
+            GST_INFO ("List remote directory successful");
+            /*
+             * Now, our list.memory points to a memory block that is list.size
+             * bytes big and contains the remote file.
+             *
+             * Do something nice with it!
+             */
+            //GST_WARNING ("NLST; %lu bytes retrieved", (unsigned long)list.size);
+            //GST_WARNING ("[%s]", list.memory);
         }
- 
+
         curl_easy_cleanup (curl); /* Always cleanup */
     }
 
@@ -264,8 +272,8 @@ int ftp_remove_directory (const char *remote_dir, const char *usrpwd) {
         strcpy (remote_url_and_file, remote_url);
         strcat (remote_url_and_file, remote_dir);
         curl_easy_setopt (curl, CURLOPT_URL, remote_url_and_file);
-        curl_easy_setopt (curl, CURLOPT_CUSTOMREQUEST, "NLST");
-        curl_easy_setopt (curl, CURLOPT_WRITEFUNCTION, write_memory_callback); /* send all data to this function  */
+        curl_easy_setopt (curl, CURLOPT_CUSTOMREQUEST, "NLST"); /* NLST or LIST */
+        curl_easy_setopt (curl, CURLOPT_WRITEFUNCTION, write_memory_callback); /* send all data to this function */
         curl_easy_setopt (curl, CURLOPT_WRITEDATA, (void *)&chunk); /* we pass our 'chunk' struct to the callback function */
         curl_easy_setopt (curl, CURLOPT_USERAGENT, "libcurl-agent/1.0"); /* some servers don't like requests that are made without a user-agent field, so we provide one */
 
@@ -273,6 +281,7 @@ int ftp_remove_directory (const char *remote_dir, const char *usrpwd) {
         if (res != CURLE_OK) {
             GST_ERROR ("curl_easy_perform() failed: %d, %s", (int)res, curl_easy_strerror (res));
         } else {
+            GST_INFO ("List remote directory successful");
             /*
              * Now, our chunk.memory points to a memory block that is chunk.size
              * bytes big and contains the remote file.

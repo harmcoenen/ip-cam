@@ -419,17 +419,25 @@ static void what_hour_is_it (char *newhour) {
 static void *ftp_upload (void *arg) {
     int n_uploaded_files = 0;
     time_t start_time, end_time;
+    struct MemoryStruct list;
 
     pthread_mutex_lock (&ftp_mutex);
     time (&start_time);
     GST_INFO ("Thread (ptid %08x) ftp_upload started %s", (int)pthread_self (), asctime (localtime (&start_time)));
 
+    list.memory = malloc (1);  /* will be grown as needed by the realloc */
+    list.size = 0;             /* no data at this point */
+
     g_print ("\nFTP NLST begin\n");
-    ftp_list_directory (".", username_passwd);
+    ftp_list_directory (".", username_passwd, &list);
+    GST_WARNING ("NLST; %lu bytes retrieved", (unsigned long)list.size);
+    GST_WARNING ("[%s]", list.memory);
     g_print ("\nFTP NLST end\n");
-    g_print ("\nFTP RMD begin\n");
-    ftp_remove_directory ("2018.11.01-20hrs/", username_passwd);
-    g_print ("\nFTP RMD end\n");
+    free (list.memory);
+
+    g_print ("\nFTP DELE begin\n");
+    ftp_remove_directory ("2018.11.11-23hrs/", username_passwd);
+    g_print ("\nFTP DELE end\n");
 
     if (appl == VIDEO) {
         GST_INFO ("FTP upload video");
