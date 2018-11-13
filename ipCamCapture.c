@@ -1,5 +1,6 @@
 #include <gst/gst.h>
 #include <gst/video/video.h>
+#include <curl/curl.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -415,6 +416,38 @@ static void what_hour_is_it (char *newhour) {
     strcpy (newhour, time_string);
 }
 
+static gboolean retentionPeriodExpired (const char *remote_dir_name, const char *format, time_t now) {
+    struct tm tmp;
+    time_t remote_dir_time;
+    double delta_time;
+
+    GST_WARNING ("remote_dir_name[%s], format[%s]", remote_dir_name, format);
+
+    strptime (remote_dir_name, format, &tmp);
+    tmp.tm_min = 0; tmp.tm_sec = 0; tmp.tm_isdst = 0;
+
+    GST_WARNING ("Year is [%d][%d]", tmp.tm_year, (tmp.tm_year + 1900));     // int tm_year	years since 1900
+    GST_WARNING ("Month is [%d][%d]", tmp.tm_mon, (tmp.tm_mon + 1));         // int tm_mon months since January – [0, 11]
+    GST_WARNING ("Day is [%d]", tmp.tm_mday);                                // int tm_mday day of the month – [1, 31]
+    GST_WARNING ("Hour is [%d]", tmp.tm_hour);                               // int tm_hour hours since midnight – [0, 23]
+    GST_WARNING ("Mins is [%d]", tmp.tm_min);                                // int tm_min minutes after the hour – [0, 59]
+    GST_WARNING ("Secs is [%d]", tmp.tm_sec);                                // int tm_sec seconds after the minute – [0, 61](until C99) / [0, 60] (since C99)[note 1]
+    GST_WARNING ("Days since Jan is [%d]", tmp.tm_yday);                     // int tm_yday days since January 1 – [0, 365]
+    GST_WARNING ("Days since Sunday is [%d]", tmp.tm_wday);                  // int tm_wday days since Sunday – [0, 6]
+    GST_WARNING ("Daylight saving is [%d]", tmp.tm_isdst);                   // int tm_isdst Daylight Saving Time flag. The value is positive if DST is in effect,
+                                                                             //   zero if not and negative if no information is available
+
+    remote_dir_time = mktime (&tmp);
+    delta_time = difftime (now, remote_dir_time);
+
+    GST_WARNING ("delta_time is [%.2f], now [%ld], remote_dir_time [%ld]", delta_time, (long)now, (long)remote_dir_time);
+
+    if (delta_time > RETENTION_PERIOD)
+        return TRUE;
+
+    return FALSE;
+}
+
 /* This function is called periodically */
 static void *ftp_upload (void *arg) {
     int n_uploaded_files = 0;
@@ -428,16 +461,22 @@ static void *ftp_upload (void *arg) {
     list.memory = malloc (1);  /* will be grown as needed by the realloc */
     list.size = 0;             /* no data at this point */
 
-    g_print ("\nFTP NLST begin\n");
+    GST_WARNING ("FTP NLST begin");
     ftp_list_directory (".", username_passwd, &list);
     GST_WARNING ("NLST; %lu bytes retrieved", (unsigned long)list.size);
     GST_WARNING ("[%s]", list.memory);
-    g_print ("\nFTP NLST end\n");
+    GST_WARNING ("FTP NLST end");
     free (list.memory);
 
-    g_print ("\nFTP DELE begin\n");
-    ftp_remove_directory ("2018.11.11-23hrs/", username_passwd);
-    g_print ("\nFTP DELE end\n");
+    if (TRUE == retentionPeriodExpired ("2018.11.01-20hrs", "%Y.%m.%d-%Hhrs", start_time)) {
+        GST_WARNING ("retentionPeriodExpired is TRUE");
+    } else {
+        GST_WARNING ("retentionPeriodExpired is FALSE");
+    }
+
+    //GST_WARNING ("FTP DELE begin");
+    //ftp_remove_directory ("2018.11.11-23hrs/", username_passwd);
+    //GST_WARNING ("FTP DELE end");
 
     if (appl == VIDEO) {
         GST_INFO ("FTP upload video");
