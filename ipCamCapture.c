@@ -417,35 +417,38 @@ static void what_hour_is_it (char *newhour) {
 }
 
 static gboolean retentionPeriodExpired (const char *remote_dir_name, const char *format, time_t now) {
-    struct tm tmp;
+    gboolean retval = FALSE;
+    struct tm tmp = {0}; // Initialization is needed to have all values set properly.
     time_t remote_dir_time;
     double delta_time;
 
-    GST_WARNING ("remote_dir_name[%s], format[%s]", remote_dir_name, format);
+    GST_INFO ("remote_dir_name[%s], format[%s]", remote_dir_name, format);
 
     strptime (remote_dir_name, format, &tmp);
-    tmp.tm_min = 0; tmp.tm_sec = 0; tmp.tm_isdst = 0;
 
-    GST_WARNING ("Year is [%d][%d]", tmp.tm_year, (tmp.tm_year + 1900));     // int tm_year	years since 1900
-    GST_WARNING ("Month is [%d][%d]", tmp.tm_mon, (tmp.tm_mon + 1));         // int tm_mon months since January – [0, 11]
-    GST_WARNING ("Day is [%d]", tmp.tm_mday);                                // int tm_mday day of the month – [1, 31]
-    GST_WARNING ("Hour is [%d]", tmp.tm_hour);                               // int tm_hour hours since midnight – [0, 23]
-    GST_WARNING ("Mins is [%d]", tmp.tm_min);                                // int tm_min minutes after the hour – [0, 59]
-    GST_WARNING ("Secs is [%d]", tmp.tm_sec);                                // int tm_sec seconds after the minute – [0, 61](until C99) / [0, 60] (since C99)[note 1]
-    GST_WARNING ("Days since Jan is [%d]", tmp.tm_yday);                     // int tm_yday days since January 1 – [0, 365]
-    GST_WARNING ("Days since Sunday is [%d]", tmp.tm_wday);                  // int tm_wday days since Sunday – [0, 6]
-    GST_WARNING ("Daylight saving is [%d]", tmp.tm_isdst);                   // int tm_isdst Daylight Saving Time flag. The value is positive if DST is in effect,
-                                                                             //   zero if not and negative if no information is available
+    GST_INFO ("Year is [%d][%d]", tmp.tm_year, (tmp.tm_year + 1900)); // int tm_year   Years since 1900
+    GST_INFO ("Month is [%d][%d]", tmp.tm_mon, (tmp.tm_mon + 1));     // int tm_mon    Months since January – [0, 11]
+    GST_INFO ("Day is [%d]", tmp.tm_mday);                            // int tm_mday   Day of the month – [1, 31]
+    GST_INFO ("Hour is [%d]", tmp.tm_hour);                           // int tm_hour   Hours since midnight – [0, 23]
+    GST_INFO ("Mins is [%d]", tmp.tm_min);                            // int tm_min    Minutes after the hour – [0, 59]
+    GST_INFO ("Secs is [%d]", tmp.tm_sec);                            // int tm_sec    Seconds after the minute – [0, 61](until C99) / [0, 60] (since C99)[note 1]
+    GST_INFO ("Days since Jan is [%d]", tmp.tm_yday);                 // int tm_yday   Days since January 1 – [0, 365]
+    GST_INFO ("Days since Sunday is [%d]", tmp.tm_wday);              // int tm_wday   Days since Sunday – [0, 6]
+    GST_INFO ("Daylight saving is [%d]", tmp.tm_isdst);               // int tm_isdst  Daylight Saving Time flag. The value is positive if DST is in effect, zero if not and negative if no information is available
 
     remote_dir_time = mktime (&tmp);
-    delta_time = difftime (now, remote_dir_time);
+    if (remote_dir_time > 0) {
+        delta_time = difftime (now, remote_dir_time);
+        GST_WARNING ("delta_time is [%.0f], retention period is [%d], now [%ld], remote_dir_time [%ld]", delta_time, RETENTION_PERIOD, (long)now, (long)remote_dir_time);
+        if (delta_time > RETENTION_PERIOD) retval = TRUE;
+    } else {
+        // mktime could not convert the tm struct values to an epoch value
+        // This usually happens when the directory name has a different format (i.e. not an auto generated date/time stamp format)
+        GST_WARNING ("Remote directory name doesn't contain a valid date/time format. So don't delete it automatically.");
+        retval = FALSE;
+    }
 
-    GST_WARNING ("delta_time is [%.2f], now [%ld], remote_dir_time [%ld]", delta_time, (long)now, (long)remote_dir_time);
-
-    if (delta_time > RETENTION_PERIOD)
-        return TRUE;
-
-    return FALSE;
+    return (retval);
 }
 
 /* This function is called periodically */
@@ -461,22 +464,17 @@ static void *ftp_upload (void *arg) {
     list.memory = malloc (1);  /* will be grown as needed by the realloc */
     list.size = 0;             /* no data at this point */
 
-    GST_WARNING ("FTP NLST begin");
     ftp_list_directory (".", username_passwd, &list);
     GST_WARNING ("NLST; %lu bytes retrieved", (unsigned long)list.size);
-    GST_WARNING ("[%s]", list.memory);
-    GST_WARNING ("FTP NLST end");
+    //GST_WARNING ("[%s]", list.memory);
     free (list.memory);
 
-    if (TRUE == retentionPeriodExpired ("2018.11.01-20hrs", "%Y.%m.%d-%Hhrs", start_time)) {
+    if (TRUE == retentionPeriodExpired ("2018.11.07-20hrs", "%Y.%m.%d-%Hhrs", start_time)) {
         GST_WARNING ("retentionPeriodExpired is TRUE");
+        // ftp_remove_directory ("2018.11.07-20hrs/", username_passwd);
     } else {
         GST_WARNING ("retentionPeriodExpired is FALSE");
     }
-
-    //GST_WARNING ("FTP DELE begin");
-    //ftp_remove_directory ("2018.11.11-23hrs/", username_passwd);
-    //GST_WARNING ("FTP DELE end");
 
     if (appl == VIDEO) {
         GST_INFO ("FTP upload video");
@@ -997,7 +995,7 @@ int main (int argc, char *argv[]) {
     /* Register a function that GLib will call every x seconds */
     mainloop_timer_id = g_timeout_add_seconds (1, (GSourceFunc)mainloop_timer, &data);
     snapshot_timer_id = g_timeout_add_seconds (data.appl_param, (GSourceFunc)snapshot_timer, &data);
-    upload_timer_id = g_timeout_add_seconds (60, (GSourceFunc)upload_timer, &data);
+    upload_timer_id = g_timeout_add_seconds (10, (GSourceFunc)upload_timer, &data);
 
     while (!user_interrupt) {
         runs++;

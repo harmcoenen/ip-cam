@@ -2,7 +2,7 @@
 #define IPCAMCAPTURE_H
 
 #define DAY_IN_SECONDS (60 * 60 * 24)
-#define RETENTION_PERIOD (DAY_IN_SECONDS * 7)
+#define RETENTION_PERIOD (DAY_IN_SECONDS * 21)
 
 static const char *capture_subdir = "/cap";
 static const char *uploads_subdir = "/upl";
