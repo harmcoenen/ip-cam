@@ -6,6 +6,7 @@
 #include <string.h>
 #include <signal.h>
 #include <unistd.h>
+#include <assert.h>
 #include <errno.h>
 #include <time.h>
 #include <limits.h>
@@ -416,30 +417,32 @@ static void what_hour_is_it (char *newhour) {
     strcpy (newhour, time_string);
 }
 
-static gboolean retentionPeriodExpired (const char *remote_dir_name, const char *format, time_t now) {
+static gboolean retention_period_expired (const char *remote_dir_name) {
+    const char *format = "%Y.%m.%d-%Hhrs";
     gboolean retval = FALSE;
     struct tm tmp = {0}; // Initialization is needed to have all values set properly.
-    time_t remote_dir_time;
+    time_t now, remote_dir_time;
     double delta_time;
 
     GST_INFO ("remote_dir_name[%s], format[%s]", remote_dir_name, format);
 
     strptime (remote_dir_name, format, &tmp);
 
-    GST_INFO ("Year is [%d][%d]", tmp.tm_year, (tmp.tm_year + 1900)); // int tm_year   Years since 1900
-    GST_INFO ("Month is [%d][%d]", tmp.tm_mon, (tmp.tm_mon + 1));     // int tm_mon    Months since January – [0, 11]
-    GST_INFO ("Day is [%d]", tmp.tm_mday);                            // int tm_mday   Day of the month – [1, 31]
-    GST_INFO ("Hour is [%d]", tmp.tm_hour);                           // int tm_hour   Hours since midnight – [0, 23]
-    GST_INFO ("Mins is [%d]", tmp.tm_min);                            // int tm_min    Minutes after the hour – [0, 59]
-    GST_INFO ("Secs is [%d]", tmp.tm_sec);                            // int tm_sec    Seconds after the minute – [0, 61](until C99) / [0, 60] (since C99)[note 1]
-    GST_INFO ("Days since Jan is [%d]", tmp.tm_yday);                 // int tm_yday   Days since January 1 – [0, 365]
-    GST_INFO ("Days since Sunday is [%d]", tmp.tm_wday);              // int tm_wday   Days since Sunday – [0, 6]
-    GST_INFO ("Daylight saving is [%d]", tmp.tm_isdst);               // int tm_isdst  Daylight Saving Time flag. The value is positive if DST is in effect, zero if not and negative if no information is available
+    GST_DEBUG ("Year is [%d][%d]", tmp.tm_year, (tmp.tm_year + 1900)); // int tm_year   Years since 1900
+    GST_DEBUG ("Month is [%d][%d]", tmp.tm_mon, (tmp.tm_mon + 1));     // int tm_mon    Months since January – [0, 11]
+    GST_DEBUG ("Day is [%d]", tmp.tm_mday);                            // int tm_mday   Day of the month – [1, 31]
+    GST_DEBUG ("Hour is [%d]", tmp.tm_hour);                           // int tm_hour   Hours since midnight – [0, 23]
+    GST_DEBUG ("Mins is [%d]", tmp.tm_min);                            // int tm_min    Minutes after the hour – [0, 59]
+    GST_DEBUG ("Secs is [%d]", tmp.tm_sec);                            // int tm_sec    Seconds after the minute – [0, 61](until C99) / [0, 60] (since C99)[note 1]
+    GST_DEBUG ("Days since Jan is [%d]", tmp.tm_yday);                 // int tm_yday   Days since January 1 – [0, 365]
+    GST_DEBUG ("Days since Sunday is [%d]", tmp.tm_wday);              // int tm_wday   Days since Sunday – [0, 6]
+    GST_DEBUG ("Daylight saving is [%d]", tmp.tm_isdst);               // int tm_isdst  Daylight Saving Time flag. The value is positive if DST is in effect, zero if not and negative if no information is available
 
     remote_dir_time = mktime (&tmp);
     if (remote_dir_time > 0) {
+        time (&now);
         delta_time = difftime (now, remote_dir_time);
-        GST_WARNING ("delta_time is [%.0f], retention period is [%d], now [%ld], remote_dir_time [%ld]", delta_time, RETENTION_PERIOD, (long)now, (long)remote_dir_time);
+        GST_INFO ("delta_time is [%.0f], retention period is [%d], now [%ld], remote_dir_time [%ld]", delta_time, RETENTION_PERIOD, (long)now, (long)remote_dir_time);
         if (delta_time > RETENTION_PERIOD) retval = TRUE;
     } else {
         // mktime could not convert the tm struct values to an epoch value
@@ -451,30 +454,43 @@ static gboolean retentionPeriodExpired (const char *remote_dir_name, const char 
     return (retval);
 }
 
-/* This function is called periodically */
-static void *ftp_upload (void *arg) {
-    int n_uploaded_files = 0;
-    time_t start_time, end_time;
+static void cleanup_remote_site (void) {
     struct MemoryStruct list;
-
-    pthread_mutex_lock (&ftp_mutex);
-    time (&start_time);
-    GST_INFO ("Thread (ptid %08x) ftp_upload started %s", (int)pthread_self (), asctime (localtime (&start_time)));
+    const char *delimiter = "\n";
+    char *remote_dir_name;
 
     list.memory = malloc (1);  /* will be grown as needed by the realloc */
     list.size = 0;             /* no data at this point */
 
     ftp_list_directory (".", username_passwd, &list);
-    GST_WARNING ("NLST; %lu bytes retrieved", (unsigned long)list.size);
-    //GST_WARNING ("[%s]", list.memory);
-    free (list.memory);
+    GST_DEBUG ("FTP list size is %lu bytes", (unsigned long)list.size);
+    GST_DEBUG ("[%s]", list.memory);
 
-    if (TRUE == retentionPeriodExpired ("2018.11.07-20hrs", "%Y.%m.%d-%Hhrs", start_time)) {
-        GST_WARNING ("retentionPeriodExpired is TRUE");
-        // ftp_remove_directory ("2018.11.07-20hrs/", username_passwd);
-    } else {
-        GST_WARNING ("retentionPeriodExpired is FALSE");
+    while ( (remote_dir_name = strsep (&list.memory, delimiter)) != NULL) {
+        if (strlen (remote_dir_name) > 0) {
+            GST_INFO ("Remote directory name is [%s][%ld/%ld]", remote_dir_name, strlen (remote_dir_name), strlen (list.memory));
+            if (TRUE == retention_period_expired (remote_dir_name)) {
+                GST_WARNING ("Retention period for [%s] is expired.", remote_dir_name);
+                // ftp_remove_directory ("2018.11.07-20hrs/", username_passwd);
+            } else {
+                GST_WARNING ("Retention period for [%s] is NOT yet expired.", remote_dir_name);
+            }
+        }
     }
+
+    free (list.memory); // Probably not needed as the strsep function handles the memory for this.
+}
+
+/* This function is called periodically */
+static void *ftp_upload (void *arg) {
+    int n_uploaded_files = 0;
+    time_t start_time, end_time;
+
+    pthread_mutex_lock (&ftp_mutex);
+    time (&start_time);
+    GST_INFO ("Thread (ptid %08x) ftp_upload started %s", (int)pthread_self (), asctime (localtime (&start_time)));
+
+    cleanup_remote_site();
 
     if (appl == VIDEO) {
         GST_INFO ("FTP upload video");

@@ -2,7 +2,7 @@
 #define IPCAMCAPTURE_H
 
 #define DAY_IN_SECONDS (60 * 60 * 24)
-#define RETENTION_PERIOD (DAY_IN_SECONDS * 21)
+#define RETENTION_PERIOD (DAY_IN_SECONDS * 14)
 
 static const char *capture_subdir = "/cap";
 static const char *uploads_subdir = "/upl";
@@ -86,7 +86,8 @@ static GstPadProbeReturn pad_probe_cb (GstPad * pad, GstPadProbeInfo * info, gpo
 int get_list_of_files_to_upload (void);
 static void what_time_is_it (char *newtime);
 static void what_hour_is_it (char *newhour);
-static gboolean retentionPeriodExpired (const char *remote_dir_name, const char *format, time_t now);
+static gboolean retention_period_expired (const char *remote_dir_name);
+static void cleanup_remote_site (void);
 static void *ftp_upload (void *arg);
 static gboolean upload_timer (CustomData *data);
 static gboolean snapshot_timer (CustomData *data);

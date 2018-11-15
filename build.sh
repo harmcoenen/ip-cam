@@ -7,4 +7,4 @@ else
     echo "Can not copy source tree as the SharedFolder is not avaiable on this system."
 fi
 
-gcc ipCamCapture.c ipCamPrinting.c ipCamFTP.c -o ipCamCapture `pkg-config --cflags --libs gstreamer-video-1.0 gstreamer-1.0 libcurl` -D_XOPEN_SOURCE=700
+gcc ipCamCapture.c ipCamPrinting.c ipCamFTP.c -o ipCamCapture `pkg-config --cflags --libs gstreamer-video-1.0 gstreamer-1.0 libcurl` -D_XOPEN_SOURCE=700 -D_GNU_SOURCE
