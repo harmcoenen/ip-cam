@@ -238,15 +238,7 @@ int ftp_list_directory (const char *remote_dir, const char *usrpwd, void *list) 
         if (res != CURLE_OK) {
             GST_ERROR ("curl_easy_perform() failed: %d, %s", (int)res, curl_easy_strerror (res));
         } else {
-            GST_INFO ("List remote directory successful");
-            /*
-             * Now, our list.memory points to a memory block that is list.size
-             * bytes big and contains the remote file.
-             *
-             * Do something nice with it!
-             */
-            //GST_WARNING ("NLST; %lu bytes retrieved", (unsigned long)list.size);
-            //GST_WARNING ("[%s]", list.memory);
+            GST_DEBUG ("List remote directory successful");
         }
 
         curl_easy_cleanup (curl); /* Always cleanup */
@@ -259,12 +251,13 @@ int ftp_list_directory (const char *remote_dir, const char *usrpwd, void *list) 
 int ftp_remove_directory (const char *remote_dir, const char *usrpwd) {
     CURL *curl;
     CURLcode res = CURLE_OK;
-    struct MemoryStruct chunk;
+    struct MemoryStruct list;
     static char remote_url_and_file[PATH_MAX];
     static char remove_cmd[50];
+    char *remote_file_name;
 
-    chunk.memory = malloc (1);  /* will be grown as needed by the realloc above */
-    chunk.size = 0;             /* no data at this point */
+    list.memory = malloc (1);  /* will be grown as needed by the realloc above */
+    list.size = 0;             /* no data at this point */
 
     curl_global_init (CURL_GLOBAL_ALL);
 
@@ -274,35 +267,53 @@ int ftp_remove_directory (const char *remote_dir, const char *usrpwd) {
         curl_easy_setopt (curl, CURLOPT_USERPWD, usrpwd);
         strcpy (remote_url_and_file, remote_url);
         strcat (remote_url_and_file, remote_dir);
+        strcat (remote_url_and_file, "/");
         curl_easy_setopt (curl, CURLOPT_URL, remote_url_and_file);
         curl_easy_setopt (curl, CURLOPT_CUSTOMREQUEST, "NLST"); /* NLST or LIST */
         curl_easy_setopt (curl, CURLOPT_WRITEFUNCTION, write_memory_callback); /* send all data to this function */
-        curl_easy_setopt (curl, CURLOPT_WRITEDATA, (void *)&chunk); /* we pass our 'chunk' struct to the callback function */
+        curl_easy_setopt (curl, CURLOPT_WRITEDATA, (void *)&list); /* we pass our 'list' struct to the callback function */
         curl_easy_setopt (curl, CURLOPT_USERAGENT, "libcurl-agent/1.0"); /* some servers don't like requests that are made without a user-agent field, so we provide one */
 
         res = curl_easy_perform (curl);
         if (res != CURLE_OK) {
             GST_ERROR ("curl_easy_perform() failed: %d, %s", (int)res, curl_easy_strerror (res));
         } else {
-            GST_INFO ("List remote directory successful");
-            /*
-             * Now, our chunk.memory points to a memory block that is chunk.size
-             * bytes big and contains the remote file.
-             *
-             * Do something nice with it!
-             *
-                    //strcpy (remove_cmd, "DELE ");
-                    //strcat (remove_cmd, remote_dir);
-                    //strcat (remove_cmd, "/2018_11_01_20_41_14.jpeg");
-                    //curl_easy_setopt (curl, CURLOPT_CUSTOMREQUEST, remove_cmd);
-             *
-             */
-            GST_WARNING ("NLST; %lu bytes retrieved", (unsigned long)chunk.size);
-            GST_WARNING ("[%s]", chunk.memory);
+            GST_DEBUG ("List remote directory successful");
+            curl_easy_setopt (curl, CURLOPT_URL, remote_url);
+            curl_easy_setopt (curl, CURLOPT_WRITEFUNCTION, NULL); /* reset write callback function */
+            curl_easy_setopt (curl, CURLOPT_WRITEDATA, NULL); /* reset write data function */
+            while ( (remote_file_name = strsep (&list.memory, delimiter)) != NULL) {
+                if (strlen (remote_file_name) > 0) {
+                    // Delete every file from the directory to be removed
+                    GST_DEBUG ("Remote file name is [%s][%ld/%ld]", remote_file_name, strlen (remote_file_name), strlen (list.memory));
+                    strcpy (remove_cmd, "DELE ");
+                    strcat (remove_cmd, remote_dir);
+                    strcat (remove_cmd, "/");
+                    strcat (remove_cmd, remote_file_name);
+                    curl_easy_setopt (curl, CURLOPT_CUSTOMREQUEST, remove_cmd);
+                    res = curl_easy_perform (curl);
+                    if (res != CURLE_OK) {
+                        GST_ERROR ("curl_easy_perform() failed: %d, %s", (int)res, curl_easy_strerror (res));
+                    } else {
+                        GST_DEBUG ("%s successful", remove_cmd);
+                    }
+                }
+            }
+
+            // And finaly remove the directory itself
+            strcpy (remove_cmd, "RMD ");
+            strcat (remove_cmd, remote_dir);
+            curl_easy_setopt (curl, CURLOPT_CUSTOMREQUEST, remove_cmd);
+            res = curl_easy_perform (curl);
+            if (res != CURLE_OK) {
+                GST_ERROR ("curl_easy_perform() failed: %d, %s", (int)res, curl_easy_strerror (res));
+            } else {
+                GST_DEBUG ("%s successful", remove_cmd);
+            }
         }
  
         curl_easy_cleanup (curl); /* Always cleanup */
-        free (chunk.memory);
+        free (list.memory);
     }
 
     curl_global_cleanup ();

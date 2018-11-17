@@ -12,6 +12,7 @@ static const char *recording_filename="rec%03d";
 static const char *snapshot_filename="snapshot";
 static const char *extension_video = ".mp4";
 static const char *extension_photo = ".jpeg";
+static const char *delimiter = "\n";
 char src_video_padname[50];
 char capture_dir[PATH_MAX];
 char capture_file[PATH_MAX];
