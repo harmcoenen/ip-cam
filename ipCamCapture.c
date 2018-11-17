@@ -1011,7 +1011,7 @@ int main (int argc, char *argv[]) {
     /* Register a function that GLib will call every x seconds */
     mainloop_timer_id = g_timeout_add_seconds (1, (GSourceFunc)mainloop_timer, &data);
     snapshot_timer_id = g_timeout_add_seconds (data.appl_param, (GSourceFunc)snapshot_timer, &data);
-    upload_timer_id = g_timeout_add_seconds (10, (GSourceFunc)upload_timer, &data);
+    upload_timer_id = g_timeout_add_seconds (60, (GSourceFunc)upload_timer, &data);
 
     while (!user_interrupt) {
         runs++;
