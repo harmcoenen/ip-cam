@@ -43,7 +43,7 @@ static size_t write_memory_callback (void *contents, size_t size, size_t nmemb, 
     return realsize;
 }
 
-int ftp_upload_file (const char *pathfilename, const char *filename, const char *usrpwd) {
+int ftp_upload_file (const char *pathfilename, const char *filename, const char *remote_dir, const char *usrpwd) {
     CURL *curl;
     CURLcode res = -1; /* By default expect curl to fail */
     FILE *hd_src;
@@ -52,7 +52,10 @@ int ftp_upload_file (const char *pathfilename, const char *filename, const char 
 
     static char remote_url_and_file[PATH_MAX];
 
-    strcpy (remote_url_and_file, remote_url); strcat (remote_url_and_file, filename);
+    strcpy (remote_url_and_file, remote_url);
+    strcat (remote_url_and_file, remote_dir);
+    strcat (remote_url_and_file, "/");
+    strcat (remote_url_and_file, filename);
 
     /* get the file size of the local file */
     if (stat (pathfilename, &file_info)) {

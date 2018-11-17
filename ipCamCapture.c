@@ -485,6 +485,7 @@ static void cleanup_remote_site (void) {
 static void *ftp_upload (void *arg) {
     int n_uploaded_files = 0;
     time_t start_time, end_time;
+    char remote_dir[20];
 
     pthread_mutex_lock (&ftp_mutex);
     time (&start_time);
@@ -492,18 +493,17 @@ static void *ftp_upload (void *arg) {
 
     cleanup_remote_site();
 
+    what_hour_is_it (remote_dir);
     if (appl == VIDEO) {
-        GST_INFO ("FTP upload video");
         if (get_list_of_files_to_upload () > 0) {
+            GST_INFO ("FTP upload video");
             char upload_file_fullname[PATH_MAX];
             strcpy (upload_file_fullname, uploads_dir); strcat (upload_file_fullname, "/"); strcat (upload_file_fullname, upload_file);
-            if (ftp_upload_file (upload_file_fullname, upload_file, username_passwd) == 0) {
+            if (ftp_upload_file (upload_file_fullname, upload_file, remote_dir, username_passwd) == 0) {
                 GST_INFO ("File [%s] uploaded successfully", upload_file);
             }
         }
     } else if (appl == PHOTO) {
-        char remote_dir[20];
-        what_hour_is_it (remote_dir);
         GST_INFO ("FTP upload photo");
         n_uploaded_files = ftp_upload_files (uploads_dir, remote_dir, username_passwd);
     }
