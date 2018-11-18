@@ -131,7 +131,9 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
             GST_DEBUG ("Debug info: %s", (dbg_info) ? dbg_info : "none");
             g_error_free (err);
             g_free (dbg_info);
-            gst_pad_add_probe (data->blockpad, GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM, pad_probe_cb, data->decoder, NULL);
+
+            error_occured = TRUE;
+            //gst_pad_add_probe (data->blockpad, GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM, pad_probe_cb, data->decoder, NULL);
             //gst_element_set_state (data->pipeline, GST_STATE_READY);
             //g_main_loop_quit (data->loop);
             break;
@@ -215,6 +217,15 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
                 gst_element_set_state (data->pipeline, GST_STATE_PAUSED);
             else
                 gst_element_set_state (data->pipeline, GST_STATE_PLAYING);
+            break;
+        }
+
+        case GST_MESSAGE_NEW_CLOCK: {
+            /* Got a new clock */
+            GstClock *newclock = NULL;
+
+            GST_WARNING ("New clock message [%s][%s] received.", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg));
+            gst_message_parse_new_clock (msg, &newclock);
             break;
         }
 
@@ -312,19 +323,37 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
             break;
         }
 
-        case GST_MESSAGE_STATE_CHANGED:
-            /* We are only interested in state-changed messages from the pipeline */
+        case GST_MESSAGE_STATE_CHANGED: {
+            GstState old_state, new_state, pending_state;
+
+            gst_message_parse_state_changed (msg, &old_state, &new_state, &pending_state);
+            GST_DEBUG ("State of element %s changed from %s to %s", GST_MESSAGE_SRC_NAME (msg), gst_element_state_get_name (old_state), gst_element_state_get_name (new_state));
+
+            /* If any element stops playing we want to know */
+            if (old_state == GST_STATE_PLAYING) {
+                if (TRUE == data->pipeline_playing) {
+                    GST_WARNING ("Element %s stopped playing.", GST_MESSAGE_SRC_NAME (msg));
+                } else {
+                    GST_DEBUG ("Element %s stopped playing.", GST_MESSAGE_SRC_NAME (msg));
+                }
+            }
+
+            /* Messages from the pipeline must be handled seperatly */
             if (GST_MESSAGE_SRC (msg) == GST_OBJECT (data->pipeline)) {
-                GstState old_state, new_state, pending_state;
-                gst_message_parse_state_changed (msg, &old_state, &new_state, &pending_state);
-                GST_INFO ("Pipeline state changed from %s to %s", gst_element_state_get_name (old_state), gst_element_state_get_name (new_state));
-                /* Print the current capabilities of the source pad */
                 if (new_state == GST_STATE_PLAYING) {
+                    data->pipeline_playing = TRUE;
+                    GST_WARNING ("Pipeline is playing");
+                    /* Print the current capabilities of the source pad */
                     print_pad_capabilities (data->source, src_video_padname);
                     print_pad_capabilities (data->convert, "sink");
                 }
+                if (old_state == GST_STATE_PLAYING) {
+                    data->pipeline_playing = FALSE;
+                    GST_WARNING ("Pipeline is not playing anymore");
+                }
             }
             break;
+        }
 
         case GST_MESSAGE_LATENCY:
             GST_INFO ("Recalculate latency");
@@ -527,10 +556,14 @@ static gboolean upload_timer (CustomData *data) {
 /* This function is called periodically */
 static gboolean snapshot_timer (CustomData *data) {
     if (appl == PHOTO) {
-        if (save_snapshot (data) == 0) {
-            GST_INFO ("Snapshot saved.");
-            strcpy (closedfilename, capture_file);
-            move_to_upload_directory (data);
+        if (TRUE == data->pipeline_playing) {
+            if (save_snapshot (data) == 0) {
+                GST_INFO ("Snapshot saved.");
+                strcpy (closedfilename, capture_file);
+                move_to_upload_directory (data);
+            } else {
+                error_occured = TRUE;
+            }
         }
     }
     return TRUE; /* Otherwise the callback will be cancelled */
@@ -542,6 +575,10 @@ static gboolean mainloop_timer (CustomData *data) {
         /* Add a pad probe to the src pad and block the downstream */
         /* Once the stream is blocked send a EOS signal to decently close the capture files */
         gst_pad_add_probe (data->blockpad, GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM, pad_probe_cb, data->decoder, NULL);
+    }
+    if (error_occured) {
+        gst_element_set_state (data->pipeline, GST_STATE_READY);
+        g_main_loop_quit (data->loop);
     }
     return TRUE; /* Otherwise the callback will be cancelled */
 }
@@ -1014,6 +1051,7 @@ int main (int argc, char *argv[]) {
 
     while (!user_interrupt) {
         runs++;
+        GST_WARNING ("Run number %d", runs);
 
         switch (appl) {
             case VIDEO:
@@ -1075,6 +1113,8 @@ int main (int argc, char *argv[]) {
         gst_object_unref (bus);
         gst_element_set_state (data.pipeline, GST_STATE_NULL);
         gst_object_unref (data.pipeline);
+        error_occured = FALSE;
+        data.pipeline_playing = FALSE;
     }
 
     pthread_mutex_destroy (&ftp_mutex);
