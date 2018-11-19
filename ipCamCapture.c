@@ -144,10 +144,18 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
             gchar *dbg_info = NULL;
 
             gst_message_parse_warning (msg, &err, &dbg_info);
-            GST_WARNING ("Warning from element %s: %s", GST_OBJECT_NAME (msg->src), err->message);
+            if (strstr (err->message, "Error") != NULL) {
+                n_warnings_as_errors++;
+            }
+            GST_WARNING ("Warning from element %s: %s [%d]", GST_OBJECT_NAME (msg->src), err->message, n_warnings_as_errors);
             GST_DEBUG ("Debug info: %s", (dbg_info) ? dbg_info : "none");
             g_error_free (err);
             g_free (dbg_info);
+
+            if (n_warnings_as_errors > 5) {
+                n_warnings_as_errors = 0;
+                error_occured = TRUE;
+            }
             break;
         }
 

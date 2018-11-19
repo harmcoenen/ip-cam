@@ -26,6 +26,7 @@ static gboolean motion = FALSE;
 static gboolean motion_detected = FALSE;
 static gboolean error_occured = FALSE;
 static gboolean user_interrupt = FALSE;
+static int n_warnings_as_errors = 0;
 guint mainloop_timer_id;
 guint snapshot_timer_id;
 guint upload_timer_id;
