@@ -254,6 +254,7 @@ int ftp_remove_directory (const char *remote_dir, const char *usrpwd) {
     struct MemoryStruct list;
     static char remote_url_and_file[PATH_MAX];
     static char remove_cmd[50];
+    char errbuf[CURL_ERROR_SIZE] = "DEADBEEF";
     char *remote_file_name;
 
     list.memory = malloc (1);  /* will be grown as needed by the realloc above */
@@ -273,6 +274,7 @@ int ftp_remove_directory (const char *remote_dir, const char *usrpwd) {
         curl_easy_setopt (curl, CURLOPT_WRITEFUNCTION, write_memory_callback); /* send all data to this function */
         curl_easy_setopt (curl, CURLOPT_WRITEDATA, (void *)&list); /* we pass our 'list' struct to the callback function */
         curl_easy_setopt (curl, CURLOPT_USERAGENT, "libcurl-agent/1.0"); /* some servers don't like requests that are made without a user-agent field, so we provide one */
+        curl_easy_setopt (curl, CURLOPT_ERRORBUFFER, errbuf); /* provide a buffer to store errors in */
 
         res = curl_easy_perform (curl);
         if (res != CURLE_OK) {
@@ -293,7 +295,14 @@ int ftp_remove_directory (const char *remote_dir, const char *usrpwd) {
                     curl_easy_setopt (curl, CURLOPT_CUSTOMREQUEST, remove_cmd);
                     res = curl_easy_perform (curl);
                     if (res != CURLE_OK) {
-                        GST_ERROR ("curl_easy_perform() failed: %d, %s", (int)res, curl_easy_strerror (res));
+                        /* Response code 250 after a DELETE command means the delete was succesful.
+                         * RETR cannot find the just deleted file or directory anymore. */
+                        if (strcmp ("RETR response: 250", errbuf) == 0) {
+                            GST_DEBUG ("%s successful", remove_cmd);
+                        } else {
+                            GST_ERROR ("curl_easy_perform() failed: %d, %s", (int)res, curl_easy_strerror (res));
+                            if (strlen (errbuf)) GST_ERROR ("%s", errbuf);
+                        }
                     } else {
                         GST_DEBUG ("%s successful", remove_cmd);
                     }
@@ -306,7 +315,14 @@ int ftp_remove_directory (const char *remote_dir, const char *usrpwd) {
             curl_easy_setopt (curl, CURLOPT_CUSTOMREQUEST, remove_cmd);
             res = curl_easy_perform (curl);
             if (res != CURLE_OK) {
-                GST_ERROR ("curl_easy_perform() failed: %d, %s", (int)res, curl_easy_strerror (res));
+                /* Response code 250 after a DELETE command means the delete was succesful.
+                 * RETR cannot find the just deleted file or directory anymore. */
+                if (strcmp ("RETR response: 250", errbuf) == 0) {
+                    GST_INFO ("%s successful", remove_cmd);
+                } else {
+                    GST_ERROR ("curl_easy_perform() failed: %d, %s", (int)res, curl_easy_strerror (res));
+                    if (strlen (errbuf)) GST_ERROR ("%s", errbuf);
+                }
             } else {
                 GST_DEBUG ("%s successful", remove_cmd);
             }
