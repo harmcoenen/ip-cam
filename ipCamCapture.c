@@ -558,6 +558,12 @@ static gboolean upload_timer (CustomData *data) {
         GST_ERROR ("Can't create ftp upoad thread: [%s]", strerror (err));
     }
 
+    // No need to use pthread_join()
+    err = pthread_detach (ftp_thread_id);
+    if (err != 0) {
+        GST_ERROR ("Can't detach thread: [%s]", strerror (err));
+    }
+
     return TRUE; /* Otherwise the callback will be cancelled */
 }
 
