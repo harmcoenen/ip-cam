@@ -555,7 +555,7 @@ static gboolean upload_timer (CustomData *data) {
 
     err = pthread_create (&ftp_thread_id, NULL, &ftp_upload, NULL);
     if (err != 0) {
-        GST_ERROR ("Can't create ftp upoad thread: [%s]", strerror (err));
+        GST_ERROR ("Can't create ftp upload thread: [%s]", strerror (err));
     }
 
     // No need to use pthread_join()
