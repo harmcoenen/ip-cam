@@ -199,7 +199,7 @@ int ftp_upload_files (const char *path_with_uploads, const char *remote_dir, con
                         GST_ERROR ("Unable to delete file [%s]", local_path_and_file);
                     }
                 } else {
-                    GST_ERROR ("curl_easy_perform() failed: %s", curl_easy_strerror (res));
+                    GST_ERROR ("curl_easy_perform() failed: %d, %s", (int)res, curl_easy_strerror (res));
                 }
                 fclose (hd_src); /* Close the local file */
             }
