@@ -24,9 +24,10 @@ char closedfilename[PATH_MAX];
 char username_passwd[25];
 static gboolean motion = FALSE;
 static gboolean motion_detected = FALSE;
-static gboolean error_occured = FALSE;
+static gboolean error_occurred = FALSE;
 static gboolean user_interrupt = FALSE;
 static int n_warnings_as_errors = 0;
+static int n_user_interrupts = 0;
 guint mainloop_timer_id;
 guint snapshot_timer_id;
 guint upload_timer_id;
@@ -61,7 +62,6 @@ struct MemoryStruct {
 
 /* Structure to contain all our information, so we can pass it to callbacks */
 typedef struct _CustomData {
-    guint appl_param;
     GMainLoop *loop;
     gboolean is_live;
     gboolean pipeline_playing;

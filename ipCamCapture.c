@@ -132,7 +132,7 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
             g_error_free (err);
             g_free (dbg_info);
 
-            error_occured = TRUE;
+            error_occurred = TRUE;
             //gst_pad_add_probe (data->blockpad, GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM, pad_probe_cb, data->decoder, NULL);
             //gst_element_set_state (data->pipeline, GST_STATE_READY);
             //g_main_loop_quit (data->loop);
@@ -153,8 +153,9 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
             g_free (dbg_info);
 
             if (n_warnings_as_errors > 5) {
+                GST_ERROR ("Too many warnings reported [%d]", n_warnings_as_errors);
                 n_warnings_as_errors = 0;
-                error_occured = TRUE;
+                error_occurred = TRUE;
             }
             break;
         }
@@ -484,7 +485,7 @@ static gboolean retention_period_expired (const char *remote_dir_name) {
     } else {
         // mktime could not convert the tm struct values to an epoch value
         // This usually happens when the directory name has a different format (i.e. not an auto generated date/time stamp format)
-        GST_WARNING ("Remote directory name doesn't contain a valid date/time format. So don't delete it automatically.");
+        GST_WARNING ("Remote directory [%s] doesn't contain a valid date/time format [%s]. So don't delete it automatically.", remote_dir_name, format);
         retval = FALSE;
     }
 
@@ -576,7 +577,7 @@ static gboolean snapshot_timer (CustomData *data) {
                 strcpy (closedfilename, capture_file);
                 move_to_upload_directory (data);
             } else {
-                error_occured = TRUE;
+                error_occurred = TRUE;
             }
         }
     }
@@ -586,11 +587,13 @@ static gboolean snapshot_timer (CustomData *data) {
 /* This function is called periodically */
 static gboolean mainloop_timer (CustomData *data) {
     if (user_interrupt) {
+        GST_WARNING ("Add probe to block pipeline because of user interrupt");
         /* Add a pad probe to the src pad and block the downstream */
         /* Once the stream is blocked send a EOS signal to decently close the capture files */
         gst_pad_add_probe (data->blockpad, GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM, pad_probe_cb, data->decoder, NULL);
     }
-    if (error_occured) {
+    if (error_occurred) {
+        GST_ERROR ("Quit main loop because an error occurred");
         gst_element_set_state (data->pipeline, GST_STATE_READY);
         g_main_loop_quit (data->loop);
     }
@@ -600,9 +603,15 @@ static gboolean mainloop_timer (CustomData *data) {
 static void handle_interrupt_signal (int signal) {
     switch (signal) {
         case SIGINT:
-            GST_WARNING ("Caught SIGINT, please wait....");
-            g_source_remove (upload_timer_id);
             user_interrupt = TRUE;
+            n_user_interrupts++;
+            if (n_user_interrupts > 3) {
+                GST_ERROR ("Caught SIGINT #%d, no more waiting. Exiting now.", n_user_interrupts);
+                error_occurred = TRUE;
+            } else {
+                GST_WARNING ("Caught SIGINT #%d, please wait....", n_user_interrupts);
+            }
+            g_source_remove (upload_timer_id);
             break;
         case SIGUSR1:
             GST_WARNING ("Caught SIGUSR1");
@@ -736,6 +745,9 @@ static void initialize (CustomData *data) {
 
 /* Handle initial arguments (0 success, -1 error) */
 static int handle_arguments (CustomData *data) {
+    time_t seconds_since_epoch;
+    struct tm *time_info;
+
     g_print ("\n---------------------------------------");
     if (rtsp_user) {
         strcpy (username_passwd, rtsp_user);
@@ -748,26 +760,23 @@ static int handle_arguments (CustomData *data) {
     } else {
         strcat (username_passwd, "pwd");
     }
-    data->appl_param = timing;
+    g_print ("\nApplication is [%s] with timing [%d]", application, timing);
     if (strcmp (application, appl_video) == 0) {
         appl = VIDEO;
-        g_print ("\napplication is video with parameter [%d]", data->appl_param);
     } else if (strcmp (application, appl_photo) == 0) {
         appl = PHOTO;
-        g_print ("\napplication is photo with parameter [%d]", data->appl_param);
     } else {
-        g_printerr ("\napplication [%s] is not yet supported.\n", application);
+        g_printerr ("\nApplication [%s] is not yet supported.\n", application);
         return -1;
     }
 
+    time (&seconds_since_epoch);
+    time_info = localtime (&seconds_since_epoch);
     g_print ("\ncamera-uri [%s]", camera_uri);
-    g_print ("\nrtsp-user [%s]", rtsp_user);
-    g_print ("\nrtsp-pass [%s]", rtsp_pass);
     g_print ("\ncombi is [%s]", username_passwd);
-    g_print ("\napplication [%s]", application);
-    g_print ("\ntiming [%d]", timing);
     g_print ("\nMotion detection %s", (motion_detection) ? "enabled" : "disabled");
-    g_print ("\n---------------------------------------\n");
+    g_print ("\nStart time %s", asctime (time_info));
+    g_print ("---------------------------------------\n");
 
     return 0;
 }
@@ -872,8 +881,8 @@ static int create_video_pipeline (int argc, char *argv[], CustomData *data) {
     g_object_set (data->encoder, "tune", 4, NULL);
 
     g_object_set (data->splitsink, "location", capture_file, NULL);
-    g_object_set (data->splitsink, "max-size-bytes", (data->appl_param * 30 * 1048576), NULL); // in bytes. 0 = disable, default is 0. Maximum 30 MB per minute.
-    g_object_set (data->splitsink, "max-size-time", (data->appl_param * 60 * GST_SECOND), NULL); // in nanoseconds. 0 = disable, default is 0
+    g_object_set (data->splitsink, "max-size-bytes", (timing * 30 * 1048576), NULL); // in bytes. 0 = disable, default is 0. Maximum 30 MB per minute.
+    g_object_set (data->splitsink, "max-size-time", (timing * 60 * GST_SECOND), NULL); // in nanoseconds. 0 = disable, default is 0
     g_object_set (data->splitsink, "max-files", 30, NULL); // default is 0
     g_object_set (data->splitsink, "muxer", data->muxer, NULL);
 
@@ -1060,7 +1069,7 @@ int main (int argc, char *argv[]) {
 
     /* Register a function that GLib will call every x seconds */
     mainloop_timer_id = g_timeout_add_seconds (1, (GSourceFunc)mainloop_timer, &data);
-    snapshot_timer_id = g_timeout_add_seconds (data.appl_param, (GSourceFunc)snapshot_timer, &data);
+    snapshot_timer_id = g_timeout_add_seconds (timing, (GSourceFunc)snapshot_timer, &data);
     upload_timer_id = g_timeout_add_seconds (60, (GSourceFunc)upload_timer, &data);
 
     while (!user_interrupt) {
@@ -1127,7 +1136,7 @@ int main (int argc, char *argv[]) {
         gst_object_unref (bus);
         gst_element_set_state (data.pipeline, GST_STATE_NULL);
         gst_object_unref (data.pipeline);
-        error_occured = FALSE;
+        error_occurred = FALSE;
         data.pipeline_playing = FALSE;
     }
 
