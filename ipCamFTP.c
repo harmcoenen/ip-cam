@@ -116,7 +116,7 @@ int ftp_upload_file (const char *pathfilename, const char *filename, const char 
                 GST_ERROR ("Unable to delete file [%s]", pathfilename);
             }
         } else {
-            GST_ERROR ("curl_easy_perform() failed: %s", curl_easy_strerror (res));
+            GST_ERROR ("curl_easy_perform() failed: %d, %s", (int)res, curl_easy_strerror (res));
         }
 
         curl_easy_cleanup (curl); /* Always cleanup */
@@ -124,7 +124,7 @@ int ftp_upload_file (const char *pathfilename, const char *filename, const char 
 
     fclose (hd_src); /* close the local file */
     curl_global_cleanup ();
-    return (res);
+    return (int)res;
 }
 
 int ftp_upload_files (const char *path_with_uploads, const char *remote_dir, const char *usrpwd) {
@@ -215,7 +215,7 @@ int ftp_upload_files (const char *path_with_uploads, const char *remote_dir, con
 
 int ftp_list_directory (const char *remote_dir, const char *usrpwd, void *list) {
     CURL *curl;
-    CURLcode res = CURLE_OK;
+    CURLcode res = -1; /* By default expect curl to fail */
     static char remote_url_and_file[PATH_MAX];
 
     curl_global_init (CURL_GLOBAL_ALL);
@@ -245,12 +245,12 @@ int ftp_list_directory (const char *remote_dir, const char *usrpwd, void *list) 
     }
 
     curl_global_cleanup ();
-    return (res);
+    return (int)res;
 }
 
 int ftp_remove_directory (const char *remote_dir, const char *usrpwd) {
     CURL *curl;
-    CURLcode res = CURLE_OK;
+    CURLcode res = -1; /* By default expect curl to fail */
     struct MemoryStruct list;
     static char remote_url_and_file[PATH_MAX];
     static char remove_cmd[50];
@@ -333,5 +333,5 @@ int ftp_remove_directory (const char *remote_dir, const char *usrpwd) {
     }
 
     curl_global_cleanup ();
-    return (res);
+    return (int)res;
 }

@@ -499,18 +499,19 @@ static void cleanup_remote_site (void) {
     list.memory = malloc (1);  /* will be grown as needed by the realloc */
     list.size = 0;             /* no data at this point */
 
-    ftp_list_directory (".", username_passwd, &list);
-    GST_DEBUG ("FTP list size is %lu bytes", (unsigned long)list.size);
-    GST_DEBUG ("[%s]", list.memory);
+    if (ftp_list_directory (".", username_passwd, &list) == 0) {
+        GST_DEBUG ("FTP list size is %lu bytes", (unsigned long)list.size);
+        GST_DEBUG ("[%s]", list.memory);
 
-    while ( (remote_dir_name = strsep (&list.memory, delimiter)) != NULL) {
-        if (strlen (remote_dir_name) > 0) {
-            GST_INFO ("Remote directory name is [%s][%ld/%ld]", remote_dir_name, strlen (remote_dir_name), strlen (list.memory));
-            if (TRUE == retention_period_expired (remote_dir_name)) {
-                GST_WARNING ("Retention period for [%s] is expired.", remote_dir_name);
-                ftp_remove_directory (remote_dir_name, username_passwd);
-            } else {
-                GST_DEBUG ("Retention period for [%s] is NOT yet expired.", remote_dir_name);
+        while ( (remote_dir_name = strsep (&list.memory, delimiter)) != NULL) {
+            if (strlen (remote_dir_name) > 0) {
+                GST_INFO ("Remote directory name is [%s][%ld/%ld]", remote_dir_name, strlen (remote_dir_name), strlen (list.memory));
+                if (TRUE == retention_period_expired (remote_dir_name)) {
+                    GST_WARNING ("Retention period for [%s] is expired.", remote_dir_name);
+                    ftp_remove_directory (remote_dir_name, username_passwd);
+                } else {
+                    GST_DEBUG ("Retention period for [%s] is NOT yet expired.", remote_dir_name);
+                }
             }
         }
     }
