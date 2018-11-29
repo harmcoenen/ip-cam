@@ -776,6 +776,7 @@ static int handle_arguments (CustomData *data) {
     g_print ("\ncamera-uri [%s]", camera_uri);
     g_print ("\ncombi is [%s]", username_passwd);
     g_print ("\nMotion detection %s", (motion_detection) ? "enabled" : "disabled");
+    g_print ("\nScale down %s", (scale_down) ? "enabled" : "disabled");
     g_print ("\nStart time %s", asctime (time_info));
     g_print ("---------------------------------------\n");
 
@@ -796,7 +797,9 @@ static int create_video_pipeline (int argc, char *argv[], CustomData *data) {
         data->motioncells = gst_element_factory_make ("motioncells", "motioncells");
         data->convert_b = gst_element_factory_make ("videoconvert", "convert_b");
     }
-    data->scale = gst_element_factory_make ("videoscale", "scale");
+    if (scale_down) {
+        data->scale = gst_element_factory_make ("videoscale", "scale");
+    }
     data->encoder = gst_element_factory_make ("x264enc", "encoder");
     data->parser = gst_element_factory_make ("h264parse", "parser");
     data->muxer = gst_element_factory_make ("mp4mux", "muxer"); // matroskamux or avimux or mp4mux
@@ -809,7 +812,7 @@ static int create_video_pipeline (int argc, char *argv[], CustomData *data) {
     data->pipeline = gst_pipeline_new ("video-pipeline");
 
     if (!data->pipeline || !data->source || !data->depay || !data->decoder || !data->convert || 
-        !data->scale || !data->encoder || !data->parser || !data->muxer || !data->splitsink) {
+        !data->encoder || !data->parser || !data->muxer || !data->splitsink) {
         GST_ERROR ("Not all elements could be created.");
         return -1;
     }
@@ -819,12 +822,21 @@ static int create_video_pipeline (int argc, char *argv[], CustomData *data) {
             return -1;
         }
     }
+    if (scale_down) {
+        if (!data->scale) {
+            GST_ERROR ("Not all elements (scale) could be created.");
+            return -1;
+        }
+    }
 
     /* Build the pipeline. */
     gst_bin_add_many (GST_BIN (data->pipeline), data->source, data->depay, data->decoder, data->convert,
-                      data->scale, data->encoder, data->parser, data->splitsink, NULL);
+                      data->encoder, data->parser, data->splitsink, NULL);
     if (motion_detection) {
         gst_bin_add_many (GST_BIN (data->pipeline), data->motioncells, data->convert_b, NULL);
+    }
+    if (scale_down) {
+        gst_bin_add (GST_BIN (data->pipeline), data->scale);
     }
 
     /* Note that we are NOT linking the source at this point. We will do it later. */
@@ -833,28 +845,44 @@ static int create_video_pipeline (int argc, char *argv[], CustomData *data) {
         return -1;
     }
     if (motion_detection) {
-        if (!gst_element_link_many (data->convert, data->motioncells, data->convert_b, data->scale, NULL)) {
-            GST_ERROR ("Elements for second part (with motion) of video path could not be linked.");
-            return -1;
+        if (scale_down) {
+            if (!gst_element_link_many (data->convert, data->motioncells, data->convert_b, data->scale, NULL)) {
+                GST_ERROR ("Elements for second part (with motion and scale-down) of video path could not be linked.");
+                return -1;
+            }
+        } else {
+            if (!gst_element_link_many (data->convert, data->motioncells, data->convert_b, data->encoder, NULL)) {
+                GST_ERROR ("Elements for second part (with motion, no scale-down) of video path could not be linked.");
+                return -1;
+            }
         }
     } else {
-        if (!gst_element_link_many (data->convert, data->scale, NULL)) {
-            GST_ERROR ("Elements for second part (without motion) of video path could not be linked.");
-            return -1;
+        if (scale_down) {
+            if (!gst_element_link_many (data->convert, data->scale, NULL)) {
+                GST_ERROR ("Elements for second part (without motion, but scale-down) of video path could not be linked.");
+                return -1;
+            }
+        } else {
+            if (!gst_element_link_many (data->convert, data->encoder, NULL)) {
+                GST_ERROR ("Elements for second part (without motion and no scale-down) of video path could not be linked.");
+                return -1;
+            }
         }
     }
 
-    /* Negotiate caps */
-    //caps = gst_caps_from_string("video/x-raw, format=(string)RGB, width=320, height=240, framerate=(fraction)30/1");
-    // https://en.wikipedia.org/wiki/Display_resolution
-    // https://en.wikipedia.org/wiki/Display_resolution#/media/File:Vector_Video_Standards8.svg
-    //caps = gst_caps_from_string("video/x-raw, width=1280, height=720"); // Change scale from HD 1080 to HD 720
-    caps = gst_caps_from_string ("video/x-raw, width=1024, height=576"); // Change scale from HD 1080 to PAL
-    if (!gst_element_link_filtered (data->scale, data->encoder, caps)) {
-        GST_ERROR ("Element scale could not be linked to element encoder.");
-        return -1;
+    if (scale_down) {
+        /* Negotiate caps */
+        //caps = gst_caps_from_string("video/x-raw, format=(string)RGB, width=320, height=240, framerate=(fraction)30/1");
+        // https://en.wikipedia.org/wiki/Display_resolution
+        // https://en.wikipedia.org/wiki/Display_resolution#/media/File:Vector_Video_Standards8.svg
+        //caps = gst_caps_from_string("video/x-raw, width=1280, height=720"); // Change scale from HD 1080 to HD 720
+        caps = gst_caps_from_string ("video/x-raw, width=1024, height=576"); // Change scale from HD 1080 to PAL
+        if (!gst_element_link_filtered (data->scale, data->encoder, caps)) {
+            GST_ERROR ("Element scale could not be linked to element encoder.");
+            return -1;
+        }
+        gst_caps_unref (caps);
     }
-    gst_caps_unref (caps);
 
     /* Link the rest of the pipeline */
     if (!gst_element_link_many (data->encoder, data->parser, data->splitsink, NULL)) {
@@ -906,7 +934,9 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
         data->motioncells = gst_element_factory_make ("motioncells", "motioncells");
         data->convert_b = gst_element_factory_make ("videoconvert", "convert_b");
     }
-    data->scale = gst_element_factory_make ("videoscale", "scale");
+    if (scale_down) {
+        data->scale = gst_element_factory_make ("videoscale", "scale");
+    }
     data->videosink = gst_element_factory_make ("fakesink", "videosink"); //autovideosink
 
     /* Attach a blockpad to this element to be able to stop the pipeline dataflow decently */
@@ -916,7 +946,7 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     data->pipeline = gst_pipeline_new ("photo-pipeline");
 
     if (!data->pipeline || !data->source || !data->depay || !data->decoder || !data->tee || 
-        !data->queue || !data->convert || !data->scale || !data->videosink) {
+        !data->queue || !data->convert || !data->videosink) {
         GST_ERROR ("Not all elements could be created.");
         return -1;
     }
@@ -926,12 +956,20 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
             return -1;
         }
     }
-
+    if (scale_down) {
+        if (!data->scale) {
+            GST_ERROR ("Not all elements (scale) could be created.");
+            return -1;
+        }
+    }
     /* Build the pipeline. */
-    gst_bin_add_many (GST_BIN (data->pipeline), data->source, data->depay, data->decoder, data->convert, 
-                      data->scale, data->videosink, NULL);
+    gst_bin_add_many (GST_BIN (data->pipeline), data->source, data->depay, data->decoder, 
+                      data->convert, data->videosink, NULL);
     if (motion_detection) {
         gst_bin_add_many (GST_BIN (data->pipeline), data->motioncells, data->convert_b, NULL);
+    }
+    if (scale_down) {
+        gst_bin_add (GST_BIN (data->pipeline), data->scale);
     }
 
     /* Note that we are NOT linking the source at this point. We will do it later. */
@@ -940,28 +978,44 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
         return -1;
     }
     if (motion_detection) {
-        if (!gst_element_link_many (data->convert, data->motioncells, data->convert_b, data->scale, NULL)) {
-            GST_ERROR ("Elements for second part (with motion) of photo path could not be linked.");
-            return -1;
+        if (scale_down) {
+            if (!gst_element_link_many (data->convert, data->motioncells, data->convert_b, data->scale, NULL)) {
+                GST_ERROR ("Elements for second part (with motion and scale-down) of photo path could not be linked.");
+                return -1;
+            }
+        } else {
+            if (!gst_element_link_many (data->convert, data->motioncells, data->convert_b, data->videosink, NULL)) {
+                GST_ERROR ("Elements for second part (with motion, no scale-down) of photo path could not be linked.");
+                return -1;
+            }
         }
     } else {
-        if (!gst_element_link_many (data->convert, data->scale, NULL)) {
-            GST_ERROR ("Elements for second part (without motion) of photo path could not be linked.");
-            return -1;
+        if (scale_down) {
+            if (!gst_element_link_many (data->convert, data->scale, NULL)) {
+                GST_ERROR ("Elements for second part (without motion, but scale-down) of photo path could not be linked.");
+                return -1;
+            }
+        } else {
+            if (!gst_element_link_many (data->convert, data->videosink, NULL)) {
+                GST_ERROR ("Elements for second part (without motion and no scale-down) of photo path could not be linked.");
+                return -1;
+            }
         }
     }
-    
-    /* Negotiate caps */
-    //caps = gst_caps_from_string("video/x-raw, format=(string)RGB, width=320, height=240, framerate=(fraction)30/1");
-    // https://en.wikipedia.org/wiki/Display_resolution
-    // https://en.wikipedia.org/wiki/Display_resolution#/media/File:Vector_Video_Standards8.svg
-    //caps = gst_caps_from_string("video/x-raw, width=1280, height=720"); // Change scale from HD 1080 to HD 720
-    caps = gst_caps_from_string ("video/x-raw, width=1024, height=576"); // Change scale from HD 1080 to PAL
-    if (!gst_element_link_filtered (data->scale, data->videosink, caps)) {
-        GST_ERROR ("Element scale could not be linked to element encoder.");
-        return -1;
+
+    if (scale_down) {
+        /* Negotiate caps */
+        //caps = gst_caps_from_string("video/x-raw, format=(string)RGB, width=320, height=240, framerate=(fraction)30/1");
+        // https://en.wikipedia.org/wiki/Display_resolution
+        // https://en.wikipedia.org/wiki/Display_resolution#/media/File:Vector_Video_Standards8.svg
+        //caps = gst_caps_from_string("video/x-raw, width=1280, height=720"); // Change scale from HD 1080 to HD 720
+        caps = gst_caps_from_string ("video/x-raw, width=1024, height=576"); // Change scale from HD 1080 to PAL
+        if (!gst_element_link_filtered (data->scale, data->videosink, caps)) {
+            GST_ERROR ("Element scale could not be linked to element encoder.");
+            return -1;
+        }
+        gst_caps_unref (caps);
     }
-    gst_caps_unref (caps);
 
     /* Set the URI to play */
     g_object_set (data->source, "location", camera_uri, NULL);

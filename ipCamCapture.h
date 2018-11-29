@@ -41,6 +41,7 @@ static const gchar *rtsp_pass = NULL;
 static const gchar *application = "video";
 static gint timing = 5;
 static gboolean motion_detection = FALSE;
+static gboolean scale_down = FALSE;
 static GOptionEntry options [] =
 {
     { "camera-uri", 'l', 0, G_OPTION_ARG_STRING, &camera_uri, "Camera URI in the form of rtsp://<ip>:<port>/videoMain", NULL },
@@ -49,6 +50,7 @@ static GOptionEntry options [] =
     { "application", 'a', 0, G_OPTION_ARG_STRING, &application, "Application mode; video or photo (default: video)", NULL },
     { "timing", 't', 0, G_OPTION_ARG_INT, &timing, "Minutes of video recording or interval seconds between each snapshot (default: 5)", NULL },
     { "motion-detection", 'm', 0, G_OPTION_ARG_NONE, &motion_detection, "Enable motion detection (default: disabled)", NULL},
+    { "scale-down", 's', 0, G_OPTION_ARG_NONE, &scale_down, "Scale down the input stream to a lower resolution (default: disabled)", NULL },
     { NULL }
 };
 
