@@ -22,6 +22,53 @@
 GST_DEBUG_CATEGORY (ipcam);
 #define GST_CAT_DEFAULT ipcam
 
+/* The sink has received a sample */
+static GstFlowReturn new_sample (GstElement *sink, CustomData *data) {
+    GstFlowReturn retval = GST_FLOW_ERROR;
+    GError *err = NULL;
+    GstCaps *caps;
+    GstBuffer *buf;
+    GstSample *sample, *converted_sample;
+    GstMapInfo map_info;
+
+    // Only process the new sample in case take_snapshot is TRUE
+    if (!take_snapshot) return GST_FLOW_OK;
+
+    /* Retrieve the buffer */
+    g_signal_emit_by_name (sink, "pull-sample", &sample);
+    if (sample) {
+        caps = gst_caps_from_string ("image/jpeg");
+        converted_sample = gst_video_convert_sample (sample, caps, GST_CLOCK_TIME_NONE, &err);
+        gst_caps_unref (caps);
+        gst_sample_unref (sample);
+        if (converted_sample) {
+            buf = gst_sample_get_buffer (converted_sample);
+            if (gst_buffer_map (buf, &map_info, GST_MAP_READ)) {
+                if (g_file_set_contents (capture_file, (const char *) map_info.data, map_info.size, &err)) {
+                    GST_INFO ("Snapshot saved.");
+                    // closedfilename is used in move_to_upload_directory so it needs to have the name of the capture_file
+                    strcpy (closedfilename, capture_file);
+                    move_to_upload_directory (data);
+                    take_snapshot = FALSE;
+                    retval = GST_FLOW_OK;
+                } else {
+                    GST_ERROR ("Could not save thumbnail: %s", err->message);
+                    g_error_free (err);
+                }
+            }
+            gst_buffer_unmap (buf, &map_info);
+            gst_sample_unref (converted_sample);
+        } else {
+            GST_ERROR ("Error converting sample: %s", err->message);
+            g_error_free (err);
+        }
+    } else {
+        GST_ERROR ("Error pulling sample from photosink");
+    }
+
+    return (retval);
+}
+
 /* This function will be called by the pad-added signal */
 static void handle_pad_added (GstElement *src, GstPad *new_pad, CustomData *data) {
     GstPad *sink_pad = gst_element_get_static_pad (data->depay, "sink");
@@ -571,17 +618,10 @@ static gboolean upload_timer (CustomData *data) {
 
 /* This function is called periodically */
 static gboolean snapshot_timer (CustomData *data) {
-    if (appl == PHOTO) {
-        if (TRUE == data->pipeline_playing) {
-            if (save_snapshot (data) == 0) {
-                GST_INFO ("Snapshot saved.");
-                strcpy (closedfilename, capture_file);
-                move_to_upload_directory (data);
-            } else {
-                error_occurred = TRUE;
-            }
-        }
-    }
+    if (appl == PHOTO)
+        if (TRUE == data->pipeline_playing)
+            take_snapshot = TRUE;
+
     return TRUE; /* Otherwise the callback will be cancelled */
 }
 
@@ -937,7 +977,7 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     if (scale_down) {
         data->scale = gst_element_factory_make ("videoscale", "scale");
     }
-    data->videosink = gst_element_factory_make ("fakesink", "videosink"); //autovideosink
+    data->photosink = gst_element_factory_make ("appsink", "photosink");
 
     /* Attach a blockpad to this element to be able to stop the pipeline dataflow decently */
     data->blockpad = gst_element_get_static_pad (data->depay, "src");
@@ -946,7 +986,7 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     data->pipeline = gst_pipeline_new ("photo-pipeline");
 
     if (!data->pipeline || !data->source || !data->depay || !data->decoder || !data->tee || 
-        !data->queue || !data->convert || !data->videosink) {
+        !data->queue || !data->convert || !data->photosink) {
         GST_ERROR ("Not all elements could be created.");
         return -1;
     }
@@ -964,7 +1004,7 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     }
     /* Build the pipeline. */
     gst_bin_add_many (GST_BIN (data->pipeline), data->source, data->depay, data->decoder, 
-                      data->convert, data->videosink, NULL);
+                      data->convert, data->photosink, NULL);
     if (motion_detection) {
         gst_bin_add_many (GST_BIN (data->pipeline), data->motioncells, data->convert_b, NULL);
     }
@@ -984,7 +1024,7 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
                 return -1;
             }
         } else {
-            if (!gst_element_link_many (data->convert, data->motioncells, data->convert_b, data->videosink, NULL)) {
+            if (!gst_element_link_many (data->convert, data->motioncells, data->convert_b, data->photosink, NULL)) {
                 GST_ERROR ("Elements for second part (with motion, no scale-down) of photo path could not be linked.");
                 return -1;
             }
@@ -996,7 +1036,7 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
                 return -1;
             }
         } else {
-            if (!gst_element_link_many (data->convert, data->videosink, NULL)) {
+            if (!gst_element_link_many (data->convert, data->photosink, NULL)) {
                 GST_ERROR ("Elements for second part (without motion and no scale-down) of photo path could not be linked.");
                 return -1;
             }
@@ -1010,12 +1050,16 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
         // https://en.wikipedia.org/wiki/Display_resolution#/media/File:Vector_Video_Standards8.svg
         //caps = gst_caps_from_string("video/x-raw, width=1280, height=720"); // Change scale from HD 1080 to HD 720
         caps = gst_caps_from_string ("video/x-raw, width=1024, height=576"); // Change scale from HD 1080 to PAL
-        if (!gst_element_link_filtered (data->scale, data->videosink, caps)) {
+        if (!gst_element_link_filtered (data->scale, data->photosink, caps)) {
             GST_ERROR ("Element scale could not be linked to element encoder.");
             return -1;
         }
         gst_caps_unref (caps);
     }
+
+    /* Configure photosink */
+    g_object_set (data->photosink, "emit-signals", TRUE, "drop", TRUE, "max-buffers", 1, NULL);
+    g_signal_connect (data->photosink, "new-sample", G_CALLBACK (new_sample), data);
 
     /* Set the URI to play */
     g_object_set (data->source, "location", camera_uri, NULL);
@@ -1031,45 +1075,6 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
         g_object_set (data->motioncells, "threshold", 0.1, NULL);
         g_object_set (data->motioncells, "minimummotionframes", 1, NULL);
     }
-
-    return 0;
-}
-
-static int save_snapshot (CustomData *data) {
-    GError *err = NULL;
-    GstCaps *caps;
-    GstBuffer *buf;
-    GstSample *last_sample, *converted_sample;
-    GstMapInfo map_info;
-
-    g_object_get (data->videosink, "last-sample", &last_sample, NULL);
-    if (last_sample == NULL) {
-        GST_ERROR ("Error getting last sample from videosink");
-        return -1;
-    }
-
-    caps = gst_caps_from_string ("image/jpeg");
-    converted_sample = gst_video_convert_sample (last_sample, caps, GST_CLOCK_TIME_NONE, &err);
-    gst_caps_unref (caps);
-    gst_sample_unref (last_sample);
-
-    if (converted_sample == NULL && err) {
-        GST_ERROR ("Error converting sample: %s", err->message);
-        g_error_free (err);
-        return -1;
-    }
-
-    buf = gst_sample_get_buffer (converted_sample);
-    if (gst_buffer_map (buf, &map_info, GST_MAP_READ)) {
-        if (!g_file_set_contents (capture_file, (const char *) map_info.data, map_info.size, &err)) {
-            GST_ERROR ("Could not save thumbnail: %s", err->message);
-            g_error_free (err);
-            return -1;
-        }
-    }
-
-    gst_buffer_unmap (buf, &map_info);
-    gst_sample_unref (converted_sample);
 
     return 0;
 }
