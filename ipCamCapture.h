@@ -24,9 +24,8 @@ char closedfilename[PATH_MAX];
 char username_passwd[25];
 static gboolean motion = FALSE;
 static gboolean motion_detected = FALSE;
-static gboolean user_interrupt = FALSE;
 static gboolean error_occurred = FALSE;
-static gboolean take_snapshot = FALSE;
+static gboolean user_interrupt = FALSE;
 static int n_warnings_as_errors = 0;
 static int n_user_interrupts = 0;
 guint mainloop_timer_id;
@@ -81,12 +80,11 @@ typedef struct _CustomData {
     GstElement *encoder;
     GstElement *parser;
     GstElement *muxer;
-    GstElement *photosink;
+    GstElement *videosink;
     GstElement *splitsink;
     GstPad *blockpad;
 } CustomData;
 
-static GstFlowReturn new_sample (GstElement *sink, CustomData *data);
 static void handle_pad_added (GstElement *src, GstPad *new_pad, CustomData *data);
 static gboolean handle_keyboard (GIOChannel *channel, GIOCondition cond, CustomData *data);
 static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data);
@@ -110,5 +108,6 @@ static void print_help (void);
 static int handle_arguments (CustomData *data);
 static int create_video_pipeline (int argc, char *argv[], CustomData *data);
 static int create_photo_pipeline (int argc, char *argv[], CustomData *data);
+static int save_snapshot (CustomData *data);
 
 #endif /* IPCAMCAPTURE_H */
