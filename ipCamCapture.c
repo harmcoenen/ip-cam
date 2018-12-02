@@ -506,7 +506,11 @@ static void cleanup_remote_site (void) {
         while ( (remote_dir_name = strsep (&list.memory, delimiter)) != NULL) {
             if (strlen (remote_dir_name) > 0) {
                 GST_INFO ("Remote directory name is [%s][%ld/%ld]", remote_dir_name, strlen (remote_dir_name), strlen (list.memory));
-                if (TRUE == retention_period_expired (remote_dir_name)) {
+                if (strcmp (remote_dir_name, "user_interrupt") == 0) {
+                    user_interrupt = TRUE;
+                } else if (strcmp (remote_dir_name, "error_occurred") == 0) {
+                    error_occurred = TRUE;
+                } else if (TRUE == retention_period_expired (remote_dir_name)) {
                     GST_WARNING ("Retention period for [%s] is expired.", remote_dir_name);
                     ftp_remove_directory (remote_dir_name, username_passwd);
                 } else {
