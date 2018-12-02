@@ -937,7 +937,7 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     if (scale_down) {
         data->scale = gst_element_factory_make ("videoscale", "scale");
     }
-    data->videosink = gst_element_factory_make ("fakesink", "videosink"); //autovideosink
+    data->photosink = gst_element_factory_make ("fakesink", "photosink");
 
     /* Attach a blockpad to this element to be able to stop the pipeline dataflow decently */
     data->blockpad = gst_element_get_static_pad (data->depay, "src");
@@ -946,7 +946,7 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     data->pipeline = gst_pipeline_new ("photo-pipeline");
 
     if (!data->pipeline || !data->source || !data->depay || !data->decoder || !data->tee || 
-        !data->queue || !data->convert || !data->videosink) {
+        !data->queue || !data->convert || !data->photosink) {
         GST_ERROR ("Not all elements could be created.");
         return -1;
     }
@@ -964,7 +964,7 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     }
     /* Build the pipeline. */
     gst_bin_add_many (GST_BIN (data->pipeline), data->source, data->depay, data->decoder, 
-                      data->convert, data->videosink, NULL);
+                      data->convert, data->photosink, NULL);
     if (motion_detection) {
         gst_bin_add_many (GST_BIN (data->pipeline), data->motioncells, data->convert_b, NULL);
     }
@@ -984,7 +984,7 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
                 return -1;
             }
         } else {
-            if (!gst_element_link_many (data->convert, data->motioncells, data->convert_b, data->videosink, NULL)) {
+            if (!gst_element_link_many (data->convert, data->motioncells, data->convert_b, data->photosink, NULL)) {
                 GST_ERROR ("Elements for second part (with motion, no scale-down) of photo path could not be linked.");
                 return -1;
             }
@@ -996,7 +996,7 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
                 return -1;
             }
         } else {
-            if (!gst_element_link_many (data->convert, data->videosink, NULL)) {
+            if (!gst_element_link_many (data->convert, data->photosink, NULL)) {
                 GST_ERROR ("Elements for second part (without motion and no scale-down) of photo path could not be linked.");
                 return -1;
             }
@@ -1010,7 +1010,7 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
         // https://en.wikipedia.org/wiki/Display_resolution#/media/File:Vector_Video_Standards8.svg
         //caps = gst_caps_from_string("video/x-raw, width=1280, height=720"); // Change scale from HD 1080 to HD 720
         caps = gst_caps_from_string ("video/x-raw, width=1024, height=576"); // Change scale from HD 1080 to PAL
-        if (!gst_element_link_filtered (data->scale, data->videosink, caps)) {
+        if (!gst_element_link_filtered (data->scale, data->photosink, caps)) {
             GST_ERROR ("Element scale could not be linked to element encoder.");
             return -1;
         }
@@ -1042,9 +1042,9 @@ static int save_snapshot (CustomData *data) {
     GstSample *last_sample, *converted_sample;
     GstMapInfo map_info;
 
-    g_object_get (data->videosink, "last-sample", &last_sample, NULL);
+    g_object_get (data->photosink, "last-sample", &last_sample, NULL);
     if (last_sample == NULL) {
-        GST_ERROR ("Error getting last sample from videosink");
+        GST_ERROR ("Error getting last sample from photosink");
         return -1;
     }
 

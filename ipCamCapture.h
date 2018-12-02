@@ -80,7 +80,7 @@ typedef struct _CustomData {
     GstElement *encoder;
     GstElement *parser;
     GstElement *muxer;
-    GstElement *videosink;
+    GstElement *photosink;
     GstElement *splitsink;
     GstPad *blockpad;
 } CustomData;
