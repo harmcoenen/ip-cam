@@ -1033,15 +1033,25 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
         g_object_set (data->motioncells, "minimummotionframes", 1, NULL);
     }
 
+    /* Set photosink properties */
+    //g_object_set (data->photosink, "async", FALSE, NULL);
+    g_object_set (data->photosink, "max-lateness", (200 * GST_MSECOND), NULL);
+
     return 0;
 }
 
 static int save_snapshot (CustomData *data) {
     GError *err = NULL;
+    gchar *last_message;
     GstCaps *caps;
     GstBuffer *buf;
     GstSample *last_sample, *converted_sample;
     GstMapInfo map_info;
+
+    g_object_get (data->photosink, "last-message", &last_message, NULL);
+    if (last_message != NULL) {
+        GST_WARNING ("Last photosink message is: %s", last_message);
+    }
 
     g_object_get (data->photosink, "last-sample", &last_sample, NULL);
     if (last_sample == NULL) {
