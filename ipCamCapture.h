@@ -71,8 +71,6 @@ typedef struct _CustomData {
     GstElement *source;
     GstElement *depay;
     GstElement *decoder;
-    GstElement *tee;
-    GstElement *queue;
     GstElement *convert;
     GstElement *motioncells;
     GstElement *convert_b;

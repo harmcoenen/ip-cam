@@ -910,7 +910,7 @@ static int create_video_pipeline (int argc, char *argv[], CustomData *data) {
     }
 
     /* Important, the encoder usually takes 1-3 seconds to process this. */
-    /* Queue buffer is generally upto 1 second. Hence, set tune=zerolatency (0x4) */
+    /* Queue buffer is generally up to 1 second. Hence, set tune=zerolatency (0x4) */
     g_object_set (data->encoder, "tune", 4, NULL);
 
     g_object_set (data->splitsink, "location", capture_file, NULL);
@@ -931,8 +931,6 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     data->source = gst_element_factory_make ("rtspsrc", "source");
     data->depay = gst_element_factory_make ("rtph264depay", "depay");
     data->decoder = gst_element_factory_make ("avdec_h264", "decoder");
-    data->tee = gst_element_factory_make ("tee", "tee");
-    data->queue = gst_element_factory_make ("queue", "queue");
     data->convert = gst_element_factory_make ("videoconvert", "convert");
     if (motion_detection) {
         data->motioncells = gst_element_factory_make ("motioncells", "motioncells");
@@ -949,8 +947,7 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     /* Create the empty pipeline */
     data->pipeline = gst_pipeline_new ("photo-pipeline");
 
-    if (!data->pipeline || !data->source || !data->depay || !data->decoder || !data->tee || 
-        !data->queue || !data->convert || !data->photosink) {
+    if (!data->pipeline || !data->source || !data->depay || !data->decoder || !data->convert || !data->photosink) {
         GST_ERROR ("Not all elements could be created.");
         return -1;
     }
@@ -967,8 +964,8 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
         }
     }
     /* Build the pipeline. */
-    gst_bin_add_many (GST_BIN (data->pipeline), data->source, data->depay, data->decoder, 
-                      data->tee, data->queue, data->convert, data->photosink, NULL);
+    gst_bin_add_many (GST_BIN (data->pipeline), data->source, data->depay, 
+                      data->decoder, data->convert, data->photosink, NULL);
     if (motion_detection) {
         gst_bin_add_many (GST_BIN (data->pipeline), data->motioncells, data->convert_b, NULL);
     }
@@ -977,7 +974,7 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     }
 
     /* Note that we are NOT linking the source at this point. We will do it later. */
-    if (!gst_element_link_many (data->depay, data->decoder, data->tee, data->queue, data->convert, NULL)) {
+    if (!gst_element_link_many (data->depay, data->decoder, data->convert, NULL)) {
         GST_ERROR ("Elements for first part of photo path could not be linked.");
         return -1;
     }
@@ -1025,15 +1022,6 @@ static int create_photo_pipeline (int argc, char *argv[], CustomData *data) {
     g_object_set (data->source, "location", camera_uri, NULL);
     g_object_set (data->source, "user-id", rtsp_user, NULL);
     g_object_set (data->source, "user-pw", rtsp_pass, NULL);
-
-    g_object_set (data->queue, "flush-on-eos", TRUE, NULL); // Discard all data in the queue when an EOS event is received, and pass on the EOS event as soon as possible (instead of waiting until all buffers in the queue have been processed, which is the default behaviour).
-    g_object_set (data->queue, "leaky", 2, NULL); // Leaky on downstream (old buffers) GST_QUEUE_LEAK_DOWNSTREAM
-    g_object_set (data->queue, "max-size-buffers", 200, NULL); // Max. number of buffers in the queue (0=disable), Default value : 200
-    g_object_set (data->queue, "max-size-bytes", 10485760, NULL); // Max. amount of data in the queue (bytes, 0=disable), Default value : 10485760
-    g_object_set (data->queue, "max-size-time", GST_SECOND, NULL); // Max. amount of data in the queue (in ns, 0=disable), Default value : 1000000000
-    g_object_set (data->queue, "min-threshold-buffers", 0, NULL); // Min. number of buffers in the queue to allow reading (0=disable), Default value : 0
-    g_object_set (data->queue, "min-threshold-bytes", 0, NULL); // Min. amount of data in the queue to allow reading (bytes, 0=disable), Default value : 0
-    g_object_set (data->queue, "min-threshold-time", 0, NULL); // Min. amount of data in the queue to allow reading (in ns, 0=disable), Default value : 0
 
     if (motion_detection) {
         g_object_set (data->motioncells, "display", 1, NULL);
