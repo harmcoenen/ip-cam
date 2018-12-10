@@ -302,6 +302,7 @@ int ftp_remove_directory (const char *remote_dir, const char *usrpwd) {
                         } else {
                             GST_ERROR ("curl_easy_perform() failed: %d, %s", (int)res, curl_easy_strerror (res));
                             if (strlen (errbuf)) GST_ERROR ("%s", errbuf);
+                            GST_ERROR ("%s failed", remove_cmd);
                         }
                     } else {
                         GST_DEBUG ("%s successful", remove_cmd);
@@ -322,6 +323,7 @@ int ftp_remove_directory (const char *remote_dir, const char *usrpwd) {
                 } else {
                     GST_ERROR ("curl_easy_perform() failed: %d, %s", (int)res, curl_easy_strerror (res));
                     if (strlen (errbuf)) GST_ERROR ("%s", errbuf);
+                    GST_ERROR ("%s failed", remove_cmd);
                 }
             } else {
                 GST_DEBUG ("%s successful", remove_cmd);
