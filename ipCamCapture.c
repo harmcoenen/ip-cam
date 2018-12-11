@@ -495,6 +495,7 @@ static gboolean retention_period_expired (const char *remote_dir_name) {
 static void cleanup_remote_site (void) {
     struct MemoryStruct list;
     char *remote_dir_name;
+    time_t start_time, end_time;
 
     list.memory = malloc (1);  /* will be grown as needed by the realloc */
     list.size = 0;             /* no data at this point */
@@ -511,8 +512,10 @@ static void cleanup_remote_site (void) {
                 } else if (strcmp (remote_dir_name, "error_occurred") == 0) {
                     error_occurred = TRUE;
                 } else if (TRUE == retention_period_expired (remote_dir_name)) {
-                    GST_WARNING ("Retention period for [%s] is expired.", remote_dir_name);
+                    time (&start_time);
                     ftp_remove_directory (remote_dir_name, username_passwd);
+                    time (&end_time);
+                    GST_WARNING ("Retention period for [%s] was expired. Removing took %.2f seconds", remote_dir_name,  difftime (end_time, start_time));
                 } else {
                     GST_DEBUG ("Retention period for [%s] is NOT yet expired.", remote_dir_name);
                 }
