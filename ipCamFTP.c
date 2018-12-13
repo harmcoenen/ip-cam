@@ -287,7 +287,7 @@ int ftp_remove_directory (const char *remote_dir, const char *usrpwd) {
             while ( (remote_file_name = strsep (&list.memory, delimiter)) != NULL) {
                 if (strlen (remote_file_name) > 0) {
                     // Delete every file from the directory to be removed
-                    GST_WARNING ("Remote file name is [%s][%ld/%ld]", remote_file_name, strlen (remote_file_name), strlen (list.memory));
+                    GST_DEBUG ("Remote file name is [%s][%ld/%ld]", remote_file_name, strlen (remote_file_name), strlen (list.memory));
                     strcpy (remove_cmd, "DELE ");
                     strcat (remove_cmd, remote_dir);
                     strcat (remove_cmd, "/");
@@ -307,13 +307,6 @@ int ftp_remove_directory (const char *remote_dir, const char *usrpwd) {
                     }
                 }
             }
-            GST_WARNING ("After While loop: Remote file name is [%s][%ld/%ld]", remote_file_name, strlen (remote_file_name), strlen (list.memory));
-            strcpy (remove_cmd, "DELE ");
-            strcat (remove_cmd, remote_dir);
-            strcat (remove_cmd, "/");
-            strcat (remove_cmd, remote_file_name);
-            curl_easy_setopt (curl, CURLOPT_CUSTOMREQUEST, remove_cmd);
-            res = curl_easy_perform (curl);
 
             // And finaly remove the directory itself
             strcpy (remove_cmd, "RMD ");
