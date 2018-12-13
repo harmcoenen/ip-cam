@@ -307,8 +307,49 @@ int ftp_remove_directory (const char *remote_dir, const char *usrpwd) {
                     }
                 }
             }
+        }
+ 
+        curl_easy_cleanup (curl); /* Always cleanup */
+        free (list.memory);
+    }
 
-            // And finaly remove the directory itself
+    curl_global_cleanup ();
+
+    // And finaly remove the directory itself
+
+    list.memory = malloc (1);  /* will be grown as needed by the realloc above */
+    list.size = 0;             /* no data at this point */
+
+    curl_global_init (CURL_GLOBAL_ALL);
+
+    /* get a curl handle */
+    curl = curl_easy_init ();
+    if (curl) {
+        curl_easy_setopt (curl, CURLOPT_USERPWD, usrpwd);
+        strcpy (remote_url_and_file, remote_url);
+        strcat (remote_url_and_file, remote_dir);
+        strcat (remote_url_and_file, "/");
+        curl_easy_setopt (curl, CURLOPT_URL, remote_url_and_file);
+        curl_easy_setopt (curl, CURLOPT_CUSTOMREQUEST, "NLST"); /* NLST or LIST */
+        curl_easy_setopt (curl, CURLOPT_WRITEFUNCTION, write_memory_callback); /* send all data to this function */
+        curl_easy_setopt (curl, CURLOPT_WRITEDATA, (void *)&list); /* we pass our 'list' struct to the callback function */
+        curl_easy_setopt (curl, CURLOPT_USERAGENT, "libcurl-agent/1.0"); /* some servers don't like requests that are made without a user-agent field, so we provide one */
+        curl_easy_setopt (curl, CURLOPT_ERRORBUFFER, errbuf); /* provide a buffer to store errors in */
+
+        res = curl_easy_perform (curl);
+        if (res != CURLE_OK) {
+            GST_ERROR ("curl_easy_perform() failed: %d, %s", (int)res, curl_easy_strerror (res));
+        } else {
+            GST_DEBUG ("List remote directory successful");
+            curl_easy_setopt (curl, CURLOPT_URL, remote_url);
+            curl_easy_setopt (curl, CURLOPT_WRITEFUNCTION, NULL); /* reset write callback function */
+            curl_easy_setopt (curl, CURLOPT_WRITEDATA, NULL); /* reset write data function */
+            while ( (remote_file_name = strsep (&list.memory, delimiter)) != NULL) {
+                if (strlen (remote_file_name) > 0) {
+                    GST_ERROR ("There is still a file [%s] in the directory [%s]", remote_file_name, remote_dir);
+                }
+            }
+
             strcpy (remove_cmd, "RMD ");
             strcat (remove_cmd, remote_dir);
             curl_easy_setopt (curl, CURLOPT_CUSTOMREQUEST, remove_cmd);
@@ -331,5 +372,6 @@ int ftp_remove_directory (const char *remote_dir, const char *usrpwd) {
     }
 
     curl_global_cleanup ();
+
     return (int)res;
 }
