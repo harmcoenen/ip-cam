@@ -318,6 +318,8 @@ int ftp_remove_directory (const char *remote_dir, const char *usrpwd) {
                  * RETR cannot find the just deleted file or directory anymore. */
                 if (strcmp ("RETR response: 250", errbuf) == 0) {
                     GST_INFO ("%s successful", remove_cmd);
+                } else if (strcmp ("RETR response: 550", errbuf) == 0) {
+                    GST_WARNING ("%s failed: %d, %s [%s]", remove_cmd, (int)res, curl_easy_strerror (res), (strlen (errbuf)) ? errbuf : "-");
                 } else {
                     GST_ERROR ("%s failed: %d, %s [%s]", remove_cmd, (int)res, curl_easy_strerror (res), (strlen (errbuf)) ? errbuf : "-");
                 }
