@@ -295,8 +295,7 @@ int ftp_remove_directory (const char *remote_dir, const char *usrpwd) {
                     curl_easy_setopt (curl, CURLOPT_CUSTOMREQUEST, remove_cmd);
                     res = curl_easy_perform (curl);
                     if (res != CURLE_OK) {
-                        /* Response code 250 after a DELETE command means the delete was succesful.
-                         * RETR cannot find the just deleted file or directory anymore. */
+                        /* Response code 250 after a DELETE command means the delete was succesful. */
                         if (strcmp ("RETR response: 250", errbuf) == 0) {
                             GST_DEBUG ("%s successful", remove_cmd);
                         } else {
@@ -314,12 +313,14 @@ int ftp_remove_directory (const char *remote_dir, const char *usrpwd) {
             curl_easy_setopt (curl, CURLOPT_CUSTOMREQUEST, remove_cmd);
             res = curl_easy_perform (curl);
             if (res != CURLE_OK) {
-                /* Response code 250 after a DELETE command means the delete was succesful.
-                 * RETR cannot find the just deleted file or directory anymore. */
+                /* Response code 250 after a RMD command means the delete was succesful. */
                 if (strcmp ("RETR response: 250", errbuf) == 0) {
-                    GST_INFO ("%s successful", remove_cmd);
+                    GST_DEBUG ("%s successful", remove_cmd);
                 } else if (strcmp ("RETR response: 550", errbuf) == 0) {
-                    GST_WARNING ("%s failed: %d, %s [%s]", remove_cmd, (int)res, curl_easy_strerror (res), (strlen (errbuf)) ? errbuf : "-");
+                    /* Response code 550 after a RMD command means the delete was not succesful.
+                     * This happens sometimes when there were too many file in the directory to be removed in one go.
+                     * Any next attempt will mostly be succesful. */
+                    GST_DEBUG ("%s failed: %d, %s [%s]", remove_cmd, (int)res, curl_easy_strerror (res), (strlen (errbuf)) ? errbuf : "-");
                 } else {
                     GST_ERROR ("%s failed: %d, %s [%s]", remove_cmd, (int)res, curl_easy_strerror (res), (strlen (errbuf)) ? errbuf : "-");
                 }

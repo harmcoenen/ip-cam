@@ -233,7 +233,7 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
             /* Got a new clock */
             GstClock *newclock = NULL;
 
-            GST_WARNING ("New clock message [%s][%s] received.", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg));
+            GST_INFO ("New clock message [%s][%s] received.", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg));
             gst_message_parse_new_clock (msg, &newclock);
             break;
         }
@@ -327,7 +327,7 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
                     GST_INFO ("Motion end");
                 }
             } else {
-                GST_WARNING ("Element message [%s][%s][%s] received (unhandled).", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg), gst_structure_get_name (msg_struct));
+                GST_INFO ("Element message [%s][%s][%s] received (unhandled).", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg), gst_structure_get_name (msg_struct));
             }
             break;
         }
@@ -381,7 +381,7 @@ static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data) 
 
         default:
             /* Unhandled message */
-            GST_WARNING ("Unhandled message [%s][%s] received.", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg));
+            GST_INFO ("Unhandled message [%s][%s] received.", GST_MESSAGE_TYPE_NAME (msg), GST_MESSAGE_SRC_NAME (msg));
             break;
     }
 }
@@ -515,7 +515,7 @@ static void cleanup_remote_site (void) {
                     time (&start_time);
                     ftp_remove_directory (remote_dir_name, username_passwd);
                     time (&end_time);
-                    GST_WARNING ("Retention period for [%s] was expired. Removing took %.2f seconds", remote_dir_name,  difftime (end_time, start_time));
+                    GST_INFO ("Retention period for [%s] was expired. Removing took %.2f seconds", remote_dir_name,  difftime (end_time, start_time));
                 } else {
                     GST_DEBUG ("Retention period for [%s] is NOT yet expired.", remote_dir_name);
                 }
