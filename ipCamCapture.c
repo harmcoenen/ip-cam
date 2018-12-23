@@ -511,6 +511,8 @@ static void cleanup_remote_site (void) {
                     user_interrupt = TRUE;
                 } else if (strcmp (remote_dir_name, "error_occurred") == 0) {
                     error_occurred = TRUE;
+                } else if (strncmp (".", remote_dir_name, 1) == 0) {
+                    GST_DEBUG ("Hidden item [%s] will be ignored.", remote_dir_name);
                 } else if (TRUE == retention_period_expired (remote_dir_name)) {
                     time (&start_time);
                     ftp_remove_directory (remote_dir_name, username_passwd);
