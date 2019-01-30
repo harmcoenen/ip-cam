@@ -1,11 +1,11 @@
 [Unit]
-Description=My service
+Description=IP-Camera Capture
 After=network.target
 
 [Service]
 ExecStart=sh /home/pi/github/ip-cam/run.sh
 WorkingDirectory=/home/pi/github/ip-cam
-StandardOutput=inherit
+StandardOutput=file:/home/pi/github/ip-cam/ip-cam-daemon.log
 StandardError=inherit
 Restart=always
 User=pi

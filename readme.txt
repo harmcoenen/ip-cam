@@ -35,14 +35,20 @@ sudo cp /home/pi/github/ip-cam/picamera/picamera.service /etc/systemd/system/.
 sudo chmod +x /etc/systemd/system/ip-cam.service 
 sudo chmod +x /etc/systemd/system/picamera.service 
 
+sudo systemctl enable ip-cam.service
+sudo systemctl enable picamera.service
+
 sudo systemctl start ip-cam.service
 sudo systemctl start picamera.service
+
+journalctl -u ip-cam.service
+journalctl -u picamera.service
 
 sudo systemctl stop ip-cam.service
 sudo systemctl stop picamera.service
 
-sudo systemctl enable ip-cam.service
-sudo systemctl enable picamera.service
-
 sudo systemctl disable ip-cam.service
 sudo systemctl disable picamera.service
+
+
+
