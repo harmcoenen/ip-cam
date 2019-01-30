@@ -5,7 +5,7 @@ After=network.target
 [Service]
 ExecStart=/bin/bash /home/pi/github/ip-cam/run.sh
 WorkingDirectory=/home/pi/github/ip-cam
-StandardOutput=file:/home/pi/github/ip-cam/ip-cam-daemon.log
+StandardOutput=inherit
 StandardError=inherit
 Restart=always
 User=pi
