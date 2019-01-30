@@ -1,0 +1,14 @@
+[Unit]
+Description=My service
+After=network.target
+
+[Service]
+ExecStart=sh /home/pi/github/ip-cam/run.sh
+WorkingDirectory=/home/pi/github/ip-cam
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=pi
+
+[Install]
+WantedBy=multi-user.target
