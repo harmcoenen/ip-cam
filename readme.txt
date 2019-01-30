@@ -41,8 +41,11 @@ sudo systemctl enable picamera.service
 sudo systemctl start ip-cam.service
 sudo systemctl start picamera.service
 
-journalctl -u ip-cam.service
-journalctl -u picamera.service
+sudo systemctl status ip-cam.service
+sudo systemctl status picamera.service
+
+sudo journalctl -u ip-cam.service
+sudo journalctl -u picamera.service
 
 sudo systemctl stop ip-cam.service
 sudo systemctl stop picamera.service

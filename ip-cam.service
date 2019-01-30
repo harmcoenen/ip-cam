@@ -3,7 +3,7 @@ Description=IP-Camera Capture
 After=network.target
 
 [Service]
-ExecStart=sh /home/pi/github/ip-cam/run.sh
+ExecStart=/bin/bash /home/pi/github/ip-cam/run.sh
 WorkingDirectory=/home/pi/github/ip-cam
 StandardOutput=file:/home/pi/github/ip-cam/ip-cam-daemon.log
 StandardError=inherit
