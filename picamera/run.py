@@ -5,7 +5,7 @@ import datetime
 
 camera = PiCamera()
 
-camera.rotation = 180
+# camera.rotation = 180
 # https://picamera.readthedocs.io/en/release-1.13/fov.html#sensor-modes
 camera.resolution = (1920, 1080) # 3280x2464 which is 4:3
 #for i in range(10):
