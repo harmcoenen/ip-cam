@@ -1,4 +1,5 @@
 from picamera import PiCamera
+from picamera import Color
 from time import sleep
 import time
 import datetime
@@ -8,6 +9,8 @@ camera = PiCamera()
 # camera.rotation = 180
 # https://picamera.readthedocs.io/en/release-1.13/fov.html#sensor-modes
 camera.resolution = (1920, 1080) # 3280x2464 which is 4:3
+camera.annotate_background = Color('black')
+camera.annotate_foreground = Color('white')
 #for i in range(10):
 try:
     while True:
@@ -30,3 +33,4 @@ finally:
     camera.framerate = 30
     camera.annotate_text_size = 32
     camera.annotate_text = "GOOD BYE"
+    camera.close()
