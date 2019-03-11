@@ -78,6 +78,7 @@ static gboolean handle_keyboard (GIOChannel *channel, GIOCondition cond, CustomD
         case G_IO_STATUS_NORMAL: {
             if (strcmp ("quit\n", retString) == 0) {
                 g_source_remove (upload_timer_id);
+                g_source_remove (cleanup_timer_id);
                 user_interrupt = TRUE;
                 gst_element_set_state (data->pipeline, GST_STATE_READY);
                 g_main_loop_quit (data->loop);
@@ -517,7 +518,7 @@ static void cleanup_remote_site (void) {
                     time (&start_time);
                     ftp_remove_directory (remote_dir_name, username_passwd);
                     time (&end_time);
-                    GST_INFO ("Retention period for [%s] was expired. Removing took %.2f seconds", remote_dir_name,  difftime (end_time, start_time));
+                    GST_WARNING ("Retention period for [%s] was expired. Removing took %.2f seconds", remote_dir_name,  difftime (end_time, start_time));
                 } else {
                     GST_DEBUG ("Retention period for [%s] is NOT yet expired.", remote_dir_name);
                 }
@@ -534,11 +535,9 @@ static void *ftp_upload (void *arg) {
     time_t start_time, end_time;
     char remote_dir[20];
 
-    pthread_mutex_lock (&ftp_mutex);
+    pthread_mutex_lock (&ftp_upload_mutex);
     time (&start_time);
     GST_INFO ("Thread (ptid %08x) ftp_upload started %s", (int)pthread_self (), asctime (localtime (&start_time)));
-
-    cleanup_remote_site();
 
     what_hour_is_it (remote_dir);
     if (appl == VIDEO) {
@@ -557,20 +556,54 @@ static void *ftp_upload (void *arg) {
 
     time (&end_time);
     GST_INFO ("Thread (ptid %08x) ftp_upload execution time = %.2f seconds, %d files uploaded.", (int)pthread_self (), difftime (end_time, start_time), n_uploaded_files);
-    pthread_mutex_unlock (&ftp_mutex);
+    pthread_mutex_unlock (&ftp_upload_mutex);
 }
 
 /* This function is called periodically */
 static gboolean upload_timer (CustomData *data) {
     int err;
 
-    err = pthread_create (&ftp_thread_id, NULL, &ftp_upload, NULL);
+    err = pthread_create (&ftp_upload_thread_id, NULL, &ftp_upload, NULL);
     if (err != 0) {
         GST_ERROR ("Can't create ftp upload thread: [%s]", strerror (err));
     }
 
     // No need to use pthread_join()
-    err = pthread_detach (ftp_thread_id);
+    err = pthread_detach (ftp_upload_thread_id);
+    if (err != 0) {
+        GST_ERROR ("Can't detach thread: [%s]", strerror (err));
+    }
+
+    return TRUE; /* Otherwise the callback will be cancelled */
+}
+
+/* This function is called periodically */
+static void *ftp_cleanup (void *arg) {
+    time_t start_time, end_time;
+
+    pthread_mutex_lock (&ftp_cleanup_mutex);
+    time (&start_time);
+    GST_INFO ("Thread (ptid %08x) ftp_cleanup started %s", (int)pthread_self (), asctime (localtime (&start_time)));
+
+    cleanup_remote_site();
+    cleanup_remote_site();
+
+    time (&end_time);
+    GST_INFO ("Thread (ptid %08x) ftp_cleanup execution time = %.2f seconds.", (int)pthread_self (), difftime (end_time, start_time));
+    pthread_mutex_unlock (&ftp_cleanup_mutex);
+}
+
+/* This function is called periodically */
+static gboolean cleanup_timer (CustomData *data) {
+    int err;
+
+    err = pthread_create (&ftp_cleanup_thread_id, NULL, &ftp_cleanup, NULL);
+    if (err != 0) {
+        GST_ERROR ("Can't create ftp cleanup thread: [%s]", strerror (err));
+    }
+
+    // No need to use pthread_join()
+    err = pthread_detach (ftp_cleanup_thread_id);
     if (err != 0) {
         GST_ERROR ("Can't detach thread: [%s]", strerror (err));
     }
@@ -622,6 +655,7 @@ static void handle_interrupt_signal (int signal) {
                 GST_WARNING ("Caught SIGINT #%d, please wait....", n_user_interrupts);
             }
             g_source_remove (upload_timer_id);
+            g_source_remove (cleanup_timer_id);
             break;
         case SIGUSR1:
             GST_WARNING ("Caught SIGUSR1");
@@ -740,7 +774,8 @@ static int prepare_work_environment (CustomData *data) {
 
 /* Initialize data structures and arrays */
 static void initialize (CustomData *data) {
-    pthread_mutex_init (&ftp_mutex, NULL);
+    pthread_mutex_init (&ftp_upload_mutex, NULL);
+    pthread_mutex_init (&ftp_cleanup_mutex, NULL);
     memset (&data, 0, sizeof (data));
     memset (src_video_padname, '\0', sizeof (src_video_padname));
     memset (capture_dir, '\0', sizeof (capture_dir));
@@ -1132,6 +1167,7 @@ int main (int argc, char *argv[]) {
     mainloop_timer_id = g_timeout_add_seconds (1, (GSourceFunc)mainloop_timer, &data);
     snapshot_timer_id = g_timeout_add_seconds (timing, (GSourceFunc)snapshot_timer, &data);
     upload_timer_id = g_timeout_add_seconds (60, (GSourceFunc)upload_timer, &data);
+    cleanup_timer_id = g_timeout_add_seconds ((60 * 30), (GSourceFunc)cleanup_timer, &data); // Cleanup every 30 minutes
 
     while (!user_interrupt) {
         runs++;
@@ -1201,7 +1237,8 @@ int main (int argc, char *argv[]) {
         data.pipeline_playing = FALSE;
     }
 
-    pthread_mutex_destroy (&ftp_mutex);
+    pthread_mutex_destroy (&ftp_upload_mutex);
+    pthread_mutex_destroy (&ftp_cleanup_mutex);
     g_print ("\n\nHave a nice day.\n");
     return 0;
 }

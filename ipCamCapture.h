@@ -31,8 +31,11 @@ static int n_user_interrupts = 0;
 guint mainloop_timer_id;
 guint snapshot_timer_id;
 guint upload_timer_id;
-pthread_t ftp_thread_id;
-pthread_mutex_t ftp_mutex;
+guint cleanup_timer_id;
+pthread_t ftp_upload_thread_id;
+pthread_t ftp_cleanup_thread_id;
+pthread_mutex_t ftp_upload_mutex;
+pthread_mutex_t ftp_cleanup_mutex;
 
 /* Argument options for this application */
 static const gchar *camera_uri = NULL;
@@ -93,7 +96,9 @@ static void what_hour_is_it (char *newhour);
 static gboolean retention_period_expired (const char *remote_dir_name);
 static void cleanup_remote_site (void);
 static void *ftp_upload (void *arg);
+static void *ftp_cleanup (void *arg);
 static gboolean upload_timer (CustomData *data);
+static gboolean cleanup_timer (CustomData *data);
 static gboolean snapshot_timer (CustomData *data);
 static gboolean mainloop_timer (CustomData *data);
 static void handle_interrupt_signal (int signal);
