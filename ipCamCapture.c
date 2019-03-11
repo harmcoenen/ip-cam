@@ -518,7 +518,7 @@ static void cleanup_remote_site (void) {
                     time (&start_time);
                     ftp_remove_directory (remote_dir_name, username_passwd);
                     time (&end_time);
-                    GST_WARNING ("Retention period for [%s] was expired. Removing took %.2f seconds", remote_dir_name,  difftime (end_time, start_time));
+                    GST_INFO ("Retention period for [%s] was expired. Removing took %.2f seconds", remote_dir_name,  difftime (end_time, start_time));
                 } else {
                     GST_DEBUG ("Retention period for [%s] is NOT yet expired.", remote_dir_name);
                 }

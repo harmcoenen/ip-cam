@@ -2,7 +2,7 @@
 
 if [ -d /mnt/hgfs/SharedFolder/github/ip-cam ] ; then
     cp '/mnt/hgfs/SharedFolder/github/ip-cam/.travis.yml' /home/harm/github/ip-cam/.
-    cp /mnt/hgfs/SharedFolder/github/ip-cam/* /home/harm/github/ip-cam/.
+    cp -r /mnt/hgfs/SharedFolder/github/ip-cam/* /home/harm/github/ip-cam/.
 else
     echo "Can not copy source tree as the SharedFolder is not avaiable on this system."
 fi
