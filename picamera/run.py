@@ -1,11 +1,13 @@
 from picamera import PiCamera
 from picamera import Color
 from time import sleep
+import sys
 import time
 import datetime
 
-try:
-    while True:
+run_program = True
+while run_program:
+    try:
         camera = PiCamera()
         # camera.rotation = 180
         # https://picamera.readthedocs.io/en/release-1.13/fov.html#sensor-modes
@@ -25,7 +27,13 @@ try:
             #camera.capture('/home/pi/github/ip-cam/upl/%s_py.jpeg' % filenamestamp, quality=10)
         else:
             camera.close()
-except:
-    print("An exception occurred.")
-finally:
-    print("End of program.")
+    except KeyboardInterrupt:
+        print("Exception: ", sys.exc_info())
+        run_program = False
+    except:
+        print("Exception: ", sys.exc_info())
+    finally:
+        camera.close()
+        if run_program:
+            print("Retry program.")
+print("End program.")
