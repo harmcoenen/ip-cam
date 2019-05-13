@@ -493,6 +493,25 @@ static gboolean retention_period_expired (const char *remote_dir_name) {
     return (retval);
 }
 
+static void setRebootFile (void) {
+    FILE *fp;
+    /* Create a new file if not exist yet */
+    fp = fopen (reboot_filename, "w");
+    fclose (fp);
+}
+
+static void resetRebootFile (void) {
+    /* First check if the file exists before attempting to remove it */
+    if (access (reboot_filename, F_OK ) == 0) {
+        /* Remove the file */
+        if (remove (reboot_filename) == 0) {
+            GST_INFO ("Reboot file [%s] deleted.", reboot_filename);
+        } else {
+            GST_ERROR ("Reboot file [%s] is NOT deleted.", reboot_filename);
+        }
+    }
+}
+
 static void cleanup_remote_site (void) {
     struct MemoryStruct list;
     char *remote_dir_name;
@@ -512,6 +531,9 @@ static void cleanup_remote_site (void) {
                     user_interrupt = TRUE;
                 } else if (strcmp (remote_dir_name, "error_occurred") == 0) {
                     error_occurred = TRUE;
+                } else if (strcmp (remote_dir_name, "force_reboot") == 0) {
+                    setRebootFile ();
+                    force_reboot = TRUE;
                 } else if (strncmp (".", remote_dir_name, 1) == 0) {
                     GST_DEBUG ("Hidden item [%s] will be ignored.", remote_dir_name);
                 } else if (TRUE == retention_period_expired (remote_dir_name)) {
@@ -635,8 +657,8 @@ static gboolean mainloop_timer (CustomData *data) {
         /* Once the stream is blocked send a EOS signal to decently close the capture files */
         gst_pad_add_probe (data->blockpad, GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM, pad_probe_cb, data->decoder, NULL);
     }
-    if (error_occurred) {
-        GST_ERROR ("Quit main loop because an error occurred");
+    if ((error_occurred) || (force_reboot)) {
+        GST_ERROR ("Quit main loop because an error occurred or a forced reboot is requested");
         gst_element_set_state (data->pipeline, GST_STATE_READY);
         g_main_loop_quit (data->loop);
     }
@@ -741,6 +763,7 @@ static int prepare_work_environment (CustomData *data) {
     working_dir = getcwd (NULL, 0);
     if (working_dir != NULL) {
         GST_INFO ("Current working dir: [%s][%lu]", working_dir, strlen (working_dir));
+        resetRebootFile ();
         strcpy (capture_dir, working_dir); strcat (capture_dir, capture_subdir);
         strcpy (uploads_dir, working_dir); strcat (uploads_dir, uploads_subdir);
         if (prepare_dir (capture_dir) == 0) {
@@ -1169,7 +1192,7 @@ int main (int argc, char *argv[]) {
     upload_timer_id = g_timeout_add_seconds (60, (GSourceFunc)upload_timer, &data);
     cleanup_timer_id = g_timeout_add_seconds ((60 * 30), (GSourceFunc)cleanup_timer, &data); // Cleanup every 30 minutes
 
-    while (!user_interrupt) {
+    while ((!user_interrupt) && (!force_reboot)) {
         runs++;
         GST_WARNING ("Run number %d", runs);
 
