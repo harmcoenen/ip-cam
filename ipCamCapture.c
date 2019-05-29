@@ -534,6 +534,8 @@ static void cleanup_remote_site (void) {
                 } else if (strcmp (remote_dir_name, "force_reboot") == 0) {
                     setRebootFile ();
                     force_reboot = TRUE;
+                } else if (strcmp (remote_dir_name, "recordings.php") == 0) {
+                    GST_DEBUG ("Core file [%s] will not be deleted.", remote_dir_name);
                 } else if (strncmp (".", remote_dir_name, 1) == 0) {
                     GST_DEBUG ("Hidden item [%s] will be ignored.", remote_dir_name);
                 } else if (TRUE == retention_period_expired (remote_dir_name)) {
@@ -607,6 +609,7 @@ static void *ftp_cleanup (void *arg) {
     time (&start_time);
     GST_INFO ("Thread (ptid %08x) ftp_cleanup started %s", (int)pthread_self (), asctime (localtime (&start_time)));
 
+    /* The cleanup is called twice because removing a directory over FTP will sometimes leave few files behind */
     cleanup_remote_site();
     cleanup_remote_site();
 
