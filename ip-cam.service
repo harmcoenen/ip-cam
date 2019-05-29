@@ -4,12 +4,12 @@ After=network.target
 
 [Service]
 ExecStart=/bin/bash /home/pi/github/ip-cam/run.sh
-ExecStop=/bin/bash /home/pi/github/ip-cam/handle_stop.sh
+ExecStop=/usr/bin/sudo /home/pi/github/ip-cam/handle_stop.sh
 WorkingDirectory=/home/pi/github/ip-cam
 StandardOutput=inherit
 StandardError=inherit
 Restart=always
-#User=pi
+User=pi
 
 [Install]
 WantedBy=multi-user.target
