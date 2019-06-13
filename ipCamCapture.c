@@ -533,6 +533,7 @@ static void cleanup_remote_site (void) {
                     error_occurred = TRUE;
                 } else if (strcmp (remote_dir_name, "force_reboot") == 0) {
                     setRebootFile ();
+                    ftp_remove_directory (remote_dir_name, username_passwd);
                     force_reboot = TRUE;
                 } else if (strcmp (remote_dir_name, "recordings.php") == 0) {
                     GST_DEBUG ("Core file [%s] will not be deleted.", remote_dir_name);

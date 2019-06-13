@@ -287,7 +287,7 @@ int ftp_remove_directory (const char *remote_dir, const char *usrpwd) {
             while ( (remote_file_name = strsep (&list.memory, delimiter)) != NULL) {
                 if (strlen (remote_file_name) > 0) {
                     // Delete every file from the directory to be removed
-                    GST_DEBUG ("Remote file name is [%s][%ld/%ld]", remote_file_name, strlen (remote_file_name), strlen (list.memory));
+                    GST_DEBUG ("Remote file name is [%s][%ld]", remote_file_name, strlen (remote_file_name));
                     strcpy (remove_cmd, "DELE ");
                     strcat (remove_cmd, remote_dir);
                     strcat (remove_cmd, "/");
