@@ -557,6 +557,9 @@ static void cleanup_remote_site (void) {
 /* This function is called periodically */
 static void *ftp_upload (void *arg) {
     int n_uploaded_files = 0;
+    long int n_uploaded_bytes = 0;
+    double delta_time = 0;
+    double bps = 0;
     time_t start_time, end_time;
     char remote_dir[20];
 
@@ -576,11 +579,15 @@ static void *ftp_upload (void *arg) {
         }
     } else if (appl == PHOTO) {
         GST_INFO ("FTP upload photo");
-        n_uploaded_files = ftp_upload_files (uploads_dir, remote_dir, username_passwd);
+        n_uploaded_files = ftp_upload_files (uploads_dir, remote_dir, username_passwd, &n_uploaded_bytes);
     }
 
     time (&end_time);
-    GST_INFO ("Thread (ptid %08x) ftp_upload execution time = %.2f seconds, %d files uploaded.", (int)pthread_self (), difftime (end_time, start_time), n_uploaded_files);
+    delta_time = difftime (end_time, start_time);
+    if (delta_time != 0) {
+        bps = n_uploaded_bytes / delta_time;
+    }
+    GST_WARNING ("Thread (ptid %08x) ftp_upl delta t %.1f s, %.1f kB/s, %ld bytes upl, %d files upl.", (int)pthread_self (), delta_time, (bps/1000), n_uploaded_bytes, n_uploaded_files);
     pthread_mutex_unlock (&ftp_upload_mutex);
 }
 

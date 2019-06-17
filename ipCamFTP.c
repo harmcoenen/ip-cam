@@ -127,7 +127,7 @@ int ftp_upload_file (const char *pathfilename, const char *filename, const char 
     return (int)res;
 }
 
-int ftp_upload_files (const char *path_with_uploads, const char *remote_dir, const char *usrpwd) {
+int ftp_upload_files (const char *path_with_uploads, const char *remote_dir, const char *usrpwd, long int *n_uploaded_bytes) {
     CURL *curl;
     CURLcode res = CURLE_OK;
     FILE *hd_src;
@@ -191,6 +191,7 @@ int ftp_upload_files (const char *path_with_uploads, const char *remote_dir, con
                 /* Check for errors */
                 if (res == CURLE_OK) {
                     n_uploaded_files++;
+                    *n_uploaded_bytes = *n_uploaded_bytes + fsize;
                     GST_INFO ("File [%s] uploaded successfully", local_path_and_file);
                     /* remove file if upload successfull */
                     if (remove (local_path_and_file) == 0) {
