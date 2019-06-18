@@ -17,7 +17,7 @@ while run_program:
         camera.annotate_background = Color('black')
         camera.annotate_foreground = Color('white')
         for i in range(7200):
-            sleep(2)
+            sleep(4)
             filenamestamp = datetime.datetime.fromtimestamp(time.time()).strftime('%Y_%m_%d_%H_%M_%S')
             annotationstamp = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')
             camera.annotate_text = annotationstamp + ' ' + str(i)

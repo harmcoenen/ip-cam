@@ -46,13 +46,16 @@ EXAMPLE run.sh
 #export GST_DEBUG_DUMP_DOT_DIR=/home/pi/RaspBerryPi/GSTreamerTutorial
 export GST_DEBUG="ipcam:2"
 
+#touch debug.snapshot
+#rm debug.snapshot
+
 reset
 
 #./ipCamCapture -l 'rtsp://192.168.178.28:88/videoMain' -u '<username>' -p '<password>' -a 'video' -t 5
 #./ipCamCapture -l 'rtsp://192.168.178.28:88/videoSub' -u '<username>' -p '<password>' -a 'video' -t 5
 #./ipCamCapture -l 'rtsp://192.168.178.28:88/videoSub' -u '<username>' -p '<password>' -a 'photo' -t 2
 #./ipCamCapture -l 'rtsp://192.168.178.28:88/videoMain' -u '<username>' -p '<password>' -a 'photo' -t 2 -s
-./ipCamCapture -l 'rtsp://192.168.178.28:88/videoMain' -u '<username>' -p '<password>' -a 'photo' -t 2
+./ipCamCapture -l 'rtsp://192.168.178.28:88/videoMain' -u '<username>' -p '<password>' -a 'photo' -t 5
 
 
 

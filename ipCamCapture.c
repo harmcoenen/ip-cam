@@ -1116,6 +1116,9 @@ static int save_snapshot (CustomData *data) {
     GstBuffer *buf;
     GstSample *last_sample, *converted_sample;
     GstMapInfo map_info;
+    gboolean debug_snapshot = FALSE;
+
+    if (access ("debug.snapshot", F_OK ) == 0) debug_snapshot = TRUE;
 
     g_object_get (data->photosink, "last-sample", &last_sample, NULL);
     if (last_sample == NULL) {
@@ -1127,7 +1130,6 @@ static int save_snapshot (CustomData *data) {
     converted_sample = gst_video_convert_sample (last_sample, caps, GST_CLOCK_TIME_NONE, &err);
     gst_caps_unref (caps);
     gst_sample_unref (last_sample);
-
     if (converted_sample == NULL && err) {
         GST_ERROR ("Error converting sample: %s", err->message);
         g_error_free (err);
@@ -1136,6 +1138,7 @@ static int save_snapshot (CustomData *data) {
 
     buf = gst_sample_get_buffer (converted_sample);
     if (gst_buffer_map (buf, &map_info, GST_MAP_READ)) {
+        if (debug_snapshot) GST_WARNING ("map_info.size is %ld", map_info.size);
         if (!g_file_set_contents (capture_file, (const char *) map_info.data, map_info.size, &err)) {
             GST_ERROR ("Could not save thumbnail: %s", err->message);
             g_error_free (err);
