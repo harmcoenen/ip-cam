@@ -587,7 +587,7 @@ static void *ftp_upload (void *arg) {
     if (delta_time != 0) {
         bps = n_uploaded_bytes / delta_time;
     }
-    GST_WARNING ("Thread (ptid %08x) ftp_upl delta t %.1f s, %.1f kB/s, %ld bytes upl, %d files upl.", (int)pthread_self (), delta_time, (bps/1000), n_uploaded_bytes, n_uploaded_files);
+    GST_INFO ("Thread (ptid %08x) ftp_upl delta t %.1f s, %.1f kB/s, %ld bytes upl, %d files upl.", (int)pthread_self (), delta_time, (bps/1000), n_uploaded_bytes, n_uploaded_files);
     pthread_mutex_unlock (&ftp_upload_mutex);
 }
 
