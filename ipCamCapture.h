@@ -52,10 +52,10 @@ static GOptionEntry options [] =
     { "camera-uri", 'l', 0, G_OPTION_ARG_STRING, &camera_uri, "Camera URI in the form of rtsp://<ip>:<port>/videoMain", NULL },
     { "rtsp-user", 'u', 0, G_OPTION_ARG_STRING, &rtsp_user, "Username for camera access", NULL },
     { "rtsp-pass", 'p', 0, G_OPTION_ARG_STRING, &rtsp_pass, "Password for camera access", NULL },
-    { "application", 'a', 0, G_OPTION_ARG_STRING, &application, "Application mode; video or photo (default: video)", NULL },
-    { "timing", 't', 0, G_OPTION_ARG_INT, &timing, "Minutes of video recording or interval seconds between each snapshot (default: 5)", NULL },
-    { "motion-detection", 'm', 0, G_OPTION_ARG_NONE, &motion_detection, "Enable motion detection (default: disabled)", NULL},
-    { "scale-down", 's', 0, G_OPTION_ARG_NONE, &scale_down, "Scale down the input stream to a lower resolution (default: disabled)", NULL },
+    { "application", 'a', 0, G_OPTION_ARG_STRING, &application, "Application mode; video or photo(default: video)", NULL },
+    { "timing", 't', 0, G_OPTION_ARG_INT, &timing, "Minutes of video recording or interval seconds between each snapshot(default: 5)", NULL },
+    { "motion-detection", 'm', 0, G_OPTION_ARG_NONE, &motion_detection, "Enable motion detection(default: disabled)", NULL},
+    { "scale-down", 's', 0, G_OPTION_ARG_NONE, &scale_down, "Scale down the input stream to a lower resolution(default: disabled)", NULL },
     { NULL }
 };
 
@@ -88,33 +88,33 @@ typedef struct _CustomData {
     GstPad *blockpad;
 } CustomData;
 
-static void handle_pad_added (GstElement *src, GstPad *new_pad, CustomData *data);
-static gboolean handle_keyboard (GIOChannel *channel, GIOCondition cond, CustomData *data);
-static void handle_bus_message (GstBus *bus, GstMessage *msg, CustomData *data);
-static GstPadProbeReturn pad_probe_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data);
-int get_list_of_files_to_upload (void);
-static void what_time_is_it (char *newtime);
-static void what_hour_is_it (char *newhour);
-static gboolean retention_period_expired (const char *remote_dir_name);
-static void setRebootFile (void);
-static void resetRebootFile (void);
-static void cleanup_remote_site (void);
-static void *ftp_upload (void *arg);
-static void *ftp_cleanup (void *arg);
-static gboolean upload_timer (CustomData *data);
-static gboolean cleanup_timer (CustomData *data);
-static gboolean snapshot_timer (CustomData *data);
-static gboolean mainloop_timer (CustomData *data);
-static void handle_interrupt_signal (int signal);
-static gboolean move_to_upload_directory (CustomData *data);
-static int is_dir (const char *dir_to_test);
-static int prepare_dir (const char *dir_to_create);
-static int prepare_work_environment (CustomData *data);
-static void initialize (CustomData *data);
-static void print_help (void);
-static int handle_arguments (CustomData *data);
-static int create_video_pipeline (int argc, char *argv[], CustomData *data);
-static int create_photo_pipeline (int argc, char *argv[], CustomData *data);
-static int save_snapshot (CustomData *data);
+static void handle_pad_added(GstElement *src, GstPad *new_pad, CustomData *data);
+static gboolean handle_keyboard(GIOChannel *channel, GIOCondition cond, CustomData *data);
+static void handle_bus_message(GstBus *bus, GstMessage *msg, CustomData *data);
+static GstPadProbeReturn pad_probe_cb(GstPad * pad, GstPadProbeInfo * info, gpointer user_data);
+int get_list_of_files_to_upload(void);
+static void what_time_is_it(char *newtime);
+static void what_hour_is_it(char *newhour);
+static gboolean retention_period_expired(const char *remote_dir_name);
+static void setRebootFile(void);
+static void resetRebootFile(void);
+static void cleanup_remote_site(void);
+static void *ftp_upload(void *arg);
+static void *ftp_cleanup(void *arg);
+static gboolean upload_timer(CustomData *data);
+static gboolean cleanup_timer(CustomData *data);
+static gboolean snapshot_timer(CustomData *data);
+static gboolean mainloop_timer(CustomData *data);
+static void handle_interrupt_signal(int signal);
+static gboolean move_to_upload_directory(CustomData *data);
+static int is_dir(const char *dir_to_test);
+static int prepare_dir(const char *dir_to_create);
+static int prepare_work_environment(CustomData *data);
+static void initialize(CustomData *data);
+static void print_help(void);
+static int handle_arguments(CustomData *data);
+static int create_video_pipeline(int argc, char *argv[], CustomData *data);
+static int create_photo_pipeline(int argc, char *argv[], CustomData *data);
+static int save_snapshot(CustomData *data);
 
 #endif /* IPCAMCAPTURE_H */
