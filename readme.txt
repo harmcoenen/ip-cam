@@ -8,6 +8,28 @@ EXAMPLE run.sh
 #gst-launch-1.0 v4l2src ! decodebin ! autovideosink
 #gst-launch-1.0 v4l2src ! ximagesink
 
+
+## COMPLETE SETUP OF RASPBERRY PI (CUSTOM):
+## Setup RaspBerry Pi3
+## 
+## https://www.raspberrypi.org/downloads/noobs/
+## https://projects.raspberrypi.org/en/projects/raspberry-pi-setting-up/3
+## https://www.sdcard.org/downloads/formatter/eula_windows/index.html
+## 
+## 1) Format SD-card
+## 2) Extract all NOOBS files and copy all files to SD-card with Windows explorer.
+## 3) Boot Raspberry Pi with SD-card
+## 4) Enable ssh connection in Pi
+## 5) Install gstreamer
+##     https://gstreamer.freedesktop.org/documentation/installing/on-linux.html?gi-language=c
+## 6) Check out git repository
+## 7) create run.sh (from readme.txt)
+## 8) Add services to systemd (disable execute bit)
+
+
+
+
+
 #| # | Name    | Description                                                    |
 #|---|---------|----------------------------------------------------------------|
 #| 0 | none    | No debug information is output.                                |
@@ -46,16 +68,19 @@ EXAMPLE run.sh
 #export GST_DEBUG_DUMP_DOT_DIR=/home/pi/RaspBerryPi/GSTreamerTutorial
 export GST_DEBUG="ipcam:2"
 
+#export CAMERA='rtsp://192.168.178.28:88/videoSub'
+export CAMERA='rtsp://192.168.178.28:88/videoMain'
+export CAM_USER=""
+export CAM_PASS=""
+
 #touch debug.snapshot
 #rm debug.snapshot
 
-reset
+#reset
 
-#./ipCamCapture -l 'rtsp://192.168.178.28:88/videoMain' -u '<username>' -p '<password>' -a 'video' -t 5
-#./ipCamCapture -l 'rtsp://192.168.178.28:88/videoSub' -u '<username>' -p '<password>' -a 'video' -t 5
-#./ipCamCapture -l 'rtsp://192.168.178.28:88/videoSub' -u '<username>' -p '<password>' -a 'photo' -t 2
-#./ipCamCapture -l 'rtsp://192.168.178.28:88/videoMain' -u '<username>' -p '<password>' -a 'photo' -t 2 -s
-./ipCamCapture -l 'rtsp://192.168.178.28:88/videoMain' -u '<username>' -p '<password>' -a 'photo' -t 5
+#./ipCamCapture -l "$CAMERA" -u "$CAM_USER" -p "$CAM_PASS" -a 'video' -t 5
+#./ipCamCapture -l "$CAMERA" -u "$CAM_USER" -p "$CAM_PASS" -a 'photo' -t 5
+ ./ipCamCapture -l "$CAMERA" -u "$CAM_USER" -p "$CAM_PASS" -a 'photo' -t 5 -s
 
 
 
