@@ -23,7 +23,7 @@ EXAMPLE run.sh
 ## 5) Install gstreamer
 ##     https://gstreamer.freedesktop.org/documentation/installing/on-linux.html?gi-language=c
 ## 6) Check out git repository
-## 7) create run.sh (from readme.txt)
+## 7) Create run.sh (from readme.txt)
 ## 8) Add services to systemd (disable execute bit)
 
 
