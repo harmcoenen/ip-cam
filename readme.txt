@@ -19,10 +19,11 @@ EXAMPLE run.sh
 ## 1) Format SD-card
 ## 2) Extract all NOOBS files and copy all files to SD-card with Windows explorer.
 ## 3) Boot Raspberry Pi with SD-card
-## 4) Enable ssh connection in Pi
-## 5) Install gstreamer
-##     https://gstreamer.freedesktop.org/documentation/installing/on-linux.html?gi-language=c
-## 6) Check out git repository
+## 4) Enable 'ssh connection' and 'camera' in Pi configuration
+## 5) Check out git repository
+## 6) Install gstreamer
+##     https://gstreamer.freedesktop.org/documentation/installing/on-linux.html
+##     sudo apt-get install libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-doc gstreamer1.0-tools gstreamer1.0-x gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 gstreamer1.0-pulseaudio
 ## 7) Create run.sh (from readme.txt)
 ## 8) Add services to systemd (disable execute bit)
 
