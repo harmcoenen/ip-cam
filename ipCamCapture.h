@@ -10,7 +10,7 @@ static const char *appl_video = "video";
 static const char *appl_photo = "photo";
 static const char *reboot_filename="reboot.force";
 static const char *recording_filename="rec%03d";
-static const char *snapshot_filename="snapshot";
+static const char *snapshot_filename="snapshot%d";
 static const char *extension_video = ".mp4";
 static const char *extension_photo = ".jpeg";
 static const char *delimiter = "\n";
@@ -47,6 +47,7 @@ static const gchar *application = "video";
 static gint timing = 5;
 static gboolean motion_detection = FALSE;
 static gboolean scale_down = FALSE;
+static gboolean take_snapshot = FALSE;
 static GOptionEntry options [] =
 {
     { "camera-uri", 'l', 0, G_OPTION_ARG_STRING, &camera_uri, "Camera URI in the form of rtsp://<ip>:<port>/videoMain", NULL },
