@@ -21,6 +21,10 @@ EXAMPLE run.sh
 ## 3) Boot Raspberry Pi with SD-card
 ## 4) Enable 'ssh connection' and 'camera' in Pi configuration
 ## 5) Check out git repository
+##      cd
+##      mkdir github
+##      cd github
+##      git clone https://github.com/harmcoenen/ip-cam.git
 ## 6) Install gstreamer
 ##     https://gstreamer.freedesktop.org/documentation/installing/on-linux.html
 ##     sudo apt-get install libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-doc gstreamer1.0-tools gstreamer1.0-x gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 gstreamer1.0-pulseaudio
@@ -28,6 +32,8 @@ EXAMPLE run.sh
 ##     sudo apt-get install libcurl4-nss-dev
 ## 7) Create run.sh (from readme.txt)
 ## 8) Add services to systemd (disable execute bit)
+##      sudo cp /home/pi/github/ip-cam/ip-cam.service /etc/systemd/system/.
+##      sudo cp /home/pi/github/ip-cam/picamera/picamera.service /etc/systemd/system/.
 
 
 
@@ -93,9 +99,6 @@ RASPBIAN SYSTEMD SERVICE FILES
 ##############################
 sudo cp /home/pi/github/ip-cam/ip-cam.service /etc/systemd/system/.
 sudo cp /home/pi/github/ip-cam/picamera/picamera.service /etc/systemd/system/.
-
-sudo chmod +x /etc/systemd/system/ip-cam.service 
-sudo chmod +x /etc/systemd/system/picamera.service 
 
 sudo systemctl enable ip-cam.service
 sudo systemctl enable picamera.service
