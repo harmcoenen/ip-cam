@@ -24,8 +24,8 @@ while run_program:
             camera.annotate_text = annotationstamp + ' ' + str(i)
             # Capture options:
             # - quality has range from 1 to 100, default is 85. 1 is low quality and 100 is high quality
-            #camera.capture('/home/pi/github/ip-cam/upl/%s_py.jpeg' % filenamestamp, resize=(1600, 1200), quality=20)
-            camera.capture('/home/pi/github/ip-cam/upl/%s_py.jpeg' % filenamestamp, quality=20)
+            camera.capture('/home/pi/github/ip-cam/upl/%s_py.jpeg' % filenamestamp, resize=(1600, 1200), quality=20)
+            #camera.capture('/home/pi/github/ip-cam/upl/%s_py.jpeg' % filenamestamp, quality=20)
             #camera.capture('/home/pi/github/ip-cam/upl/%s_py.jpeg' % filenamestamp, quality=10)
         else:
             camera.close()
