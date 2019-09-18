@@ -32,8 +32,10 @@ EXAMPLE run.sh
 ##     sudo apt-get install libcurl4-nss-dev
 ## 7) Create run.sh (from readme.txt)
 ## 8) Add services to systemd (disable execute bit)
-##      sudo cp /home/pi/github/ip-cam/ip-cam.service /etc/systemd/system/.
-##      sudo cp /home/pi/github/ip-cam/picamera/picamera.service /etc/systemd/system/.
+##      sudo cp /home/pi/github/ip-cam/ip-cam.service /lib/systemd/system/.
+##      sudo cp /home/pi/github/ip-cam/picamera/picamera.service /lib/systemd/system/.
+##      sudo systemctl enable ip-cam.service
+##      sudo systemctl enable picamera.service
 
 
 
@@ -97,9 +99,6 @@ export CAM_PASS=""
 ##############################
 RASPBIAN SYSTEMD SERVICE FILES
 ##############################
-sudo cp /home/pi/github/ip-cam/ip-cam.service /etc/systemd/system/.
-sudo cp /home/pi/github/ip-cam/picamera/picamera.service /etc/systemd/system/.
-
 sudo systemctl enable ip-cam.service
 sudo systemctl enable picamera.service
 
