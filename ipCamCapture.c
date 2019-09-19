@@ -1255,11 +1255,11 @@ int main(int argc, char *argv[]) {
 
         /* Add a keyboard watch so we get notified of keystrokes */
 #ifdef G_OS_WIN32
-        io_channel = g_io_channel_win32_new_fd(fileno(stdin));
+        //io_channel = g_io_channel_win32_new_fd(fileno(stdin));
 #else
-        io_channel = g_io_channel_unix_new(fileno(stdin));
+        //io_channel = g_io_channel_unix_new(fileno(stdin));
 #endif
-        g_io_add_watch(io_channel, G_IO_IN,(GIOFunc)handle_keyboard, &data);
+        //g_io_add_watch(io_channel, G_IO_IN,(GIOFunc)handle_keyboard, &data);
 
         /* Run main loop */
         data.loop = g_main_loop_new(NULL, FALSE);
