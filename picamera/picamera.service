@@ -3,7 +3,7 @@ Description=Pi Camera
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 -u /home/pi/github/ip-cam/picamera/run.py
+ExecStart=/usr/bin/python3 -u /home/pi/github/ip-cam/picamera/run.py --rotation=0 --sleeptime=5
 WorkingDirectory=/home/pi/github/ip-cam/picamera
 StandardOutput=inherit
 StandardError=inherit
