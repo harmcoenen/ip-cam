@@ -16,7 +16,7 @@ It can perform the following activities:
 
 
 ## Setup RaspBerry Pi3
-* [Setup RaspBerry Pi3] (https://projects.raspberrypi.org/en/projects/raspberry-pi-setting-up/3) including a [pi camera v2](https://www.raspberrypi.org/products/camera-module-v2/)
+* Setup [RaspBerry Pi3](https://projects.raspberrypi.org/en/projects/raspberry-pi-setting-up/3) including a [pi camera v2](https://www.raspberrypi.org/products/camera-module-v2/)
 * On a Windows machine prepare an SD-card (16 GB or larger)
   * Format SD-card by using [sdcard formatter](https://www.sdcard.org/downloads/formatter/eula_windows/index.html)
   * Download latest [NOOBS](https://www.raspberrypi.org/downloads/noobs/) zipfile
