@@ -1,5 +1,8 @@
 # Internet Protocol Camera (ip-cam)
 
+## Build status
+[![Build Status](https://travis-ci.org/harmcoenen/ip-cam.svg?branch=master)](https://travis-ci.org/harmcoenen/ip-cam)
+
 ## About
 This project is a security suite using [gstreamer](https://gstreamer.freedesktop.org/documentation/tutorials/index.html) and running on a [RaspBerry Pi3](https://www.raspberrypi.org/).
 It can perform the following activities:
