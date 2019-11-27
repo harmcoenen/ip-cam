@@ -12,10 +12,10 @@ It can perform the following activities:
 * Scale down the captured pictures.
 * Motion detection.
 * Every minute upload all the captured pictures or videos to an FTP-server in a date/time structured directory (easy to find back the data).
-* The uploaded data has a retention time of 14 days. Every 30 minutes a cleanup acion is done on the FTP-server.
+* The uploaded data has a retention time of 14 days. Every 30 minutes a cleanup action is done on the FTP-server.
 * The suite is split up in two services:
-  * picamera.service which is programmed in Python. This only captures the pictures from the Pi Camera v2.
-  * ip-cam.service which is programmed in c language. Controls the rest of the whole suite.
+  * picamera.service which is coded in Python. This only captures the pictures from the Pi Camera v2.
+  * ip-cam.service which is coded in c language. Controls the rest of the whole suite.
 
 
 ## Setup RaspBerry Pi3
