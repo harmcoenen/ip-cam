@@ -36,6 +36,10 @@ EXAMPLE run.sh
 ##      sudo cp /home/pi/github/ip-cam/picamera/picamera.service /lib/systemd/system/.
 ##      sudo systemctl enable ip-cam.service
 ##      sudo systemctl enable picamera.service
+## 9) Adapt journalctl max log size
+##      sudo vi /etc/systemd/journald.conf
+##      SystemMaxUse=100M
+##      RuntimeMaxUse=100M
 
 
 
@@ -119,3 +123,13 @@ sudo systemctl disable picamera.service
 
 
 
+##############################
+Some convenient journalctl commands.
+##############################
+journalctl --disk-usage
+journalctl --list-boots
+journalctl --verify
+journalctl --boot
+journalctl --help
+journalctl --user
+journalctl --system

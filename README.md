@@ -64,6 +64,13 @@ sudo systemctl enable ip-cam.service
 sudo systemctl enable picamera.service
 ```
 
+* Adapt journalctl settings for max log size
+```
+sudo vi /etc/systemd/journald.conf
+SystemMaxUse=100M
+RuntimeMaxUse=100M
+```
+
 ## Start the security suite
 * Since all is set up now just reboot the RaspBerry Pi3 and the suite should start automatically after boot.
 * The following commands can be used to control the two services.
@@ -87,5 +94,13 @@ sudo systemctl disable ip-cam.service
 sudo systemctl disable picamera.service
 ```
 
-
-
+* Some convenient journalctl commands.
+```
+journalctl --disk-usage
+journalctl --list-boots
+journalctl --verify
+journalctl --boot
+journalctl --help
+journalctl --user
+journalctl --system
+```
