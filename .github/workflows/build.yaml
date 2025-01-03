@@ -35,12 +35,15 @@ jobs:
                              gstreamer1.0-gl \
                              gstreamer1.0-gtk3 \
                              gstreamer1.0-pulseaudio \
-#                             gstreamer1.0-doc \
 
     - name: Build code
       run: |
-        pwd
-        ls -hal
         gcc --version
         pkg-config --cflags --libs gstreamer-video-1.0 gstreamer-1.0 libcurl
-        gcc ipCamCapture.c ipCamPrinting.c ipCamFTP.c -o ipCamCapture `pkg-config --cflags --libs gstreamer-video-1.0 gstreamer-1.0 libcurl` -D_XOPEN_SOURCE=700 -D_GNU_SOURCE -fcommon
+        gcc ipCamCapture.c ipCamPrinting.c ipCamFTP.c \
+            -o ipCamCapture \
+            `pkg-config --cflags --libs gstreamer-video-1.0 gstreamer-1.0 libcurl` \
+            -D_XOPEN_SOURCE=700 \
+            -D_GNU_SOURCE \
+            -fcommon
+        ls -hal
