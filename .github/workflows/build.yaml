@@ -19,29 +19,29 @@ jobs:
 
     - name: Install dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install libunwind-dev
-        sudo apt-get install libcurl4-nss-dev
-        sudo apt-get install libgstreamer1.0-0
-        sudo apt-get install gstreamer1.0-plugins-base
-        sudo apt-get install gstreamer1.0-plugins-good
-        sudo apt-get install gstreamer1.0-plugins-bad
-        sudo apt-get install gstreamer1.0-plugins-ugly
-        sudo apt-get install gstreamer1.0-libav
-        sudo apt-get install gstreamer1.0-tools
-        sudo apt-get install gstreamer1.0-x
-        sudo apt-get install gstreamer1.0-alsa
-        sudo apt-get install gstreamer1.0-gl
-        sudo apt-get install gstreamer1.0-gtk3
-        sudo apt-get install gstreamer1.0-pulseaudio
-        sudo apt-get install libgstreamer-plugins-base1.0-dev
-        pkg-config --cflags --libs gstreamer-video-1.0 gstreamer-1.0 libcurl
-#        sudo apt-get install gstreamer1.0-doc
+        sudo apt-get update && \
+        sudo apt-get install libunwind-dev \
+                             libcurl4-nss-dev \
+                             libgstreamer1.0-0 \
+                             libgstreamer-plugins-base1.0-dev \
+                             gstreamer1.0-plugins-base \
+                             gstreamer1.0-plugins-good \
+                             gstreamer1.0-plugins-bad \
+                             gstreamer1.0-plugins-ugly \
+                             gstreamer1.0-libav \
+                             gstreamer1.0-tools \
+                             gstreamer1.0-x \
+                             gstreamer1.0-alsa \
+                             gstreamer1.0-gl \
+                             gstreamer1.0-gtk3 \
+                             gstreamer1.0-pulseaudio \
+#                            gstreamer1.0-doc
 
     - name: Build code
       run: |
         pwd
         ls -hal
         gcc --version
-        gcc ipCamCapture.c ipCamPrinting.c ipCamFTP.c -o ipCamCapture `pkg-config --cflags --libs gstreamer-video-1.0 gstreamer-1.0 libcurl` -D_XOPEN_SOURCE=700 -D_GNU_SOURCE
+        pkg-config --cflags --libs gstreamer-video-1.0 gstreamer-1.0 libcurl
+#        gcc ipCamCapture.c ipCamPrinting.c ipCamFTP.c -o ipCamCapture `pkg-config --cflags --libs gstreamer-video-1.0 gstreamer-1.0 libcurl` -D_XOPEN_SOURCE=700 -D_GNU_SOURCE
 
