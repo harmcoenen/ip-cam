@@ -11,7 +11,8 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+#    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
     - name: Checkout code
@@ -35,7 +36,7 @@ jobs:
                              gstreamer1.0-gl \
                              gstreamer1.0-gtk3 \
                              gstreamer1.0-pulseaudio \
-#                            gstreamer1.0-doc
+#                             gstreamer1.0-doc \
 
     - name: Build code
       run: |
